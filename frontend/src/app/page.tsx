@@ -1,69 +1,89 @@
-import Image from "next/image";
+"use client";
+
+import { FormEvent, useEffect, useState } from "react";
+
+type User = { id: number; name: string; email: string };
 
 export default function Home() {
+  const [user, setUser] = useState<User | null>(null);
+  const [register, setRegister] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then(async response => {
+        if (response.ok) setUser(await response.json());
+        else if (response.status !== 401) throw new Error();
+      })
+      .catch(() => setError("Cannot reach the server. Make sure the backend is running."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const fields = new FormData(form);
+    await mutate(register ? "register" : "login", {
+      name: fields.get("name"), email: fields.get("email"), password: fields.get("password"),
+    });
+  }
+
+  async function mutate(action: string, body?: object) {
+    setBusy(true);
+    setError("");
+    try {
+      const csrfResponse = await fetch("/api/auth/csrf", { cache: "no-store" });
+      if (!csrfResponse.ok) throw new Error("Cannot reach the server. Please try again.");
+      const csrf = await csrfResponse.json();
+      const response = await fetch(`/api/auth/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", [csrf.headerName]: csrf.token },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (!response.ok) {
+        const messages: Record<number, string> = {
+          400: "Check your details. Use a valid email and a password of 8–72 bytes when registering.",
+          401: "Incorrect email or password.",
+          403: "Your session expired. Please try again.",
+          409: "This email already has an account. Sign in instead.",
+        };
+        throw new Error(messages[response.status] || "Something went wrong. Please try again.");
+      }
+      setUser(action === "logout" ? null : await response.json());
+      setRegister(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Cannot reach the server.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <main className="auth-shell">
+      <section className="auth-card" aria-labelledby="heading">
+        <p className="brand">UNIEVENTS</p>
+        {loading ? <p role="status">Checking your session…</p> : user ? <>
+          <span className="badge">You’re signed in</span>
+          <h1 id="heading">Welcome, {user.name}.</h1>
+          <p className="subtitle">Your next campus experience starts here.</p>
+          <div className="account"><span>Your account</span><strong>{user.email}</strong></div>
+          <button disabled={busy} onClick={() => mutate("logout")}>{busy ? "Signing out…" : "Sign out"}</button>
+        </> : <>
+          <h1 id="heading">{register ? "Join your campus." : "Welcome back."}</h1>
+          <p className="subtitle">{register ? "Create your UniEvents account to get started." : "Sign in to your UniEvents account."}</p>
+          <form onSubmit={submit} key={register ? "register" : "login"}>
+            {register && <label>Full name<input name="name" autoComplete="name" required maxLength={100} placeholder="Your name" /></label>}
+            <label>Email address<input name="email" type="email" autoComplete="email" required maxLength={254} placeholder="you@university.edu" /></label>
+            <label>Password<input name="password" type="password" autoComplete={register ? "new-password" : "current-password"} required minLength={register ? 8 : 1} maxLength={72} placeholder={register ? "At least 8 characters" : "Your password"} /></label>
+            <button disabled={busy} type="submit">{busy ? "Please wait…" : register ? "Create account" : "Sign in"}</button>
+          </form>
+          <p className="switch">{register ? "Already have an account?" : "New to UniEvents?"} <button className="text-button" disabled={busy} onClick={() => { setRegister(!register); setError(""); }}>{register ? "Sign in" : "Create account"}</button></p>
+        </>}
+        {error && <p className="error" role="alert">{error}</p>}
+      </section>
+      <p className="footer-note">Campus moments. Shared experiences.</p>
+    </main>
   );
 }
