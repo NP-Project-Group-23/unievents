@@ -142,8 +142,8 @@ All work executes on dedicated feature branches branched from `origin/dev`. Exis
 | # | Milestone Name | Work Packages | Git Feature Branch | Dependencies | Status |
 |---|---|---|---|---|---|
 | **M1** | **Network Transport & Protocol Framing** | B01, B02 | `feature/member-01-phase-1-tcp-protocol` | None | DONE |
-| **M2** | **Domain Persistence, Auth & Session Handlers** | B03, B04 | `feature/member-01-phase-2-auth-handlers` | M1 | IN_PROGRESS |
-| **M3** | **JavaFX Client UI & Comprehensive Test Suite** | F01, T01 | `feature/member-01-phase-3-client-ui-verification` | M1, M2 | PLANNED |
+| **M2** | **Domain Persistence, Auth & Session Handlers** | B03, B04 | `feature/member-01-phase-2-auth-handlers` | M1 | DONE |
+| **M3** | **JavaFX Client UI & Comprehensive Test Suite** | F01, T01 | `feature/member-01-phase-3-client-ui-verification` | M1, M2 | DONE |
 
 ---
 
