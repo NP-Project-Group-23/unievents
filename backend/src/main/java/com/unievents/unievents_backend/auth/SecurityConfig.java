@@ -15,7 +15,7 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain security(HttpSecurity http) throws Exception {
         return http.authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/csrf", "/api/auth/register", "/api/auth/login", "/api/admin/metrics", "/api/metrics", "/error").permitAll()
+                .requestMatchers("/api/auth/csrf", "/api/auth/register", "/api/auth/login", "/api/admin/metrics/**", "/api/metrics/**", "/error").permitAll()
                 .anyRequest().authenticated())
             .exceptionHandling(errors -> errors
                 .authenticationEntryPoint((request, response, exception) -> response.sendError(401)))

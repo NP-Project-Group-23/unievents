@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 
 type User = { id: number; name: string; email: string };
 
@@ -83,6 +84,9 @@ export default function Home() {
         </>}
         {error && <p className="error" role="alert">{error}</p>}
       </section>
+      <Link href="/monitoring" style={{ marginTop: 18, fontSize: 13, color: "#215d45", textDecoration: "none", fontWeight: 600 }}>
+        📊 Live Server & Thread Pool Monitor →
+      </Link>
       <p className="footer-note">Campus moments. Shared experiences.</p>
     </main>
   );
