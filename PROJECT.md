@@ -231,11 +231,18 @@ backend/src/main/java/com/unievents/unievents_backend/
 │       ├── StudentAuthService.java
 │       ├── SessionContext.java
 │       └── SessionManager.java
-└── handlers/
-    ├── RegisterHandler.java
-    ├── LoginHandler.java
-    ├── LogoutHandler.java
-    └── SessionCheckHandler.java
+├── handlers/
+│   ├── RegisterHandler.java
+│   ├── LoginHandler.java
+│   ├── LogoutHandler.java
+│   └── SessionCheckHandler.java
+└── ui/
+    ├── FxThreadUtils.java
+    ├── SessionHolder.java
+    ├── ConnectionIndicator.java
+    ├── LoginView.java
+    ├── RegisterView.java
+    └── AuthUiCoordinator.java
 
 backend/src/main/resources/
 └── schema.sql (includes role column & index)
@@ -249,7 +256,11 @@ backend/src/test/java/com/unievents/unievents_backend/
 │   ├── UserRepositoryTest.java
 │   ├── StudentAuthServiceTest.java
 │   └── SessionManagerTest.java
+├── ui/
+│   ├── JavaFxTestHelper.java
+│   └── AuthUiComponentsTest.java
 └── integration/
     ├── Member01AuthProtocolIntegrationTest.java
-    └── Member01DownstreamIntegrationTest.java
+    ├── Member01DownstreamIntegrationTest.java
+    └── T01ComprehensiveEdgeCaseTest.java
 ```
