@@ -9,4 +9,7 @@ CREATE TABLE IF NOT EXISTS app_users (
     CONSTRAINT ck_users_role CHECK (role IN ('STUDENT', 'ADMIN'))
 );
 
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'STUDENT';
+
 CREATE INDEX IF NOT EXISTS idx_users_email ON app_users(email);
+

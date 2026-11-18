@@ -25,9 +25,19 @@ public class RegisterHandler implements RequestHandler {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final StudentAuthService authService;
+    private final com.unievents.unievents_backend.domain.service.SessionManager sessionManager;
 
     public RegisterHandler(StudentAuthService authService) {
+        this(authService, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public RegisterHandler(
+            StudentAuthService authService,
+            @org.springframework.lang.Nullable com.unievents.unievents_backend.domain.service.SessionManager sessionManager
+    ) {
         this.authService = authService;
+        this.sessionManager = sessionManager;
     }
 
     @Override
@@ -46,10 +56,33 @@ public class RegisterHandler implements RequestHandler {
         String password = payload.path("password").asText(null);
         String roleStr = payload.path("role").asText(null);
 
-        Role role = Role.fromString(roleStr);
+        Role assignedRole = Role.STUDENT;
+        if (roleStr != null && !roleStr.isBlank()) {
+            Role requestedRole = Role.fromString(roleStr);
+            if (requestedRole == Role.ADMIN) {
+                boolean isAdmin = false;
+                if (context != null && "ADMIN".equalsIgnoreCase(context.role())) {
+                    isAdmin = true;
+                } else {
+                    String token = resolveToken(request);
+                    if (token != null && sessionManager != null && sessionManager.requireRole(token, Role.ADMIN)) {
+                        isAdmin = true;
+                    }
+                }
+
+                if (!isAdmin) {
+                    return ResponseEnvelope.error(
+                            request.requestId(),
+                            ErrorCode.FORBIDDEN,
+                            "Public registration cannot assign ADMIN role. Administrator privilege required."
+                    );
+                }
+                assignedRole = Role.ADMIN;
+            }
+        }
 
         try {
-            User user = authService.register(name, email, password, role);
+            User user = authService.register(name, email, password, assignedRole);
 
             ObjectNode data = MAPPER.createObjectNode();
             data.put("id", user.id());
@@ -65,5 +98,18 @@ public class RegisterHandler implements RequestHandler {
         } catch (Exception e) {
             return ResponseEnvelope.error(request.requestId(), ErrorCode.INTERNAL_ERROR, "Registration failed: " + e.getMessage());
         }
+    }
+
+    private String resolveToken(RequestEnvelope request) {
+        if (request == null) {
+            return null;
+        }
+        if (request.token() != null && !request.token().isBlank()) {
+            return request.token().strip();
+        }
+        if (request.payload() != null && request.payload().hasNonNull("token")) {
+            return request.payload().get("token").asText().strip();
+        }
+        return null;
     }
 }

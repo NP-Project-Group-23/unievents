@@ -2,11 +2,14 @@ package com.unievents.unievents_backend.network.server;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.unievents.unievents_backend.domain.service.SessionContext;
+import com.unievents.unievents_backend.domain.service.SessionManager;
 import com.unievents.unievents_backend.network.protocol.ErrorCode;
 import com.unievents.unievents_backend.network.protocol.RequestEnvelope;
 import com.unievents.unievents_backend.network.protocol.ResponseEnvelope;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -17,9 +20,23 @@ public class RequestDispatcher {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private final Map<String, RequestHandler> handlers = new ConcurrentHashMap<>();
+    private volatile SessionManager sessionManager;
 
     public RequestDispatcher() {
+        this(null);
+    }
+
+    public RequestDispatcher(SessionManager sessionManager) {
+        this.sessionManager = sessionManager;
         registerDefaultHandlers();
+    }
+
+    public SessionManager getSessionManager() {
+        return sessionManager;
+    }
+
+    public void setSessionManager(SessionManager sessionManager) {
+        this.sessionManager = sessionManager;
     }
 
     private void registerDefaultHandlers() {
@@ -88,8 +105,10 @@ public class RequestDispatcher {
             );
         }
 
+        ConnectionContext effectiveContext = enrichContext(request, context);
+
         try {
-            return handler.handle(request, context);
+            return handler.handle(request, effectiveContext);
         } catch (Exception e) {
             return ResponseEnvelope.error(
                     request.requestId(),
@@ -97,5 +116,46 @@ public class RequestDispatcher {
                     "Internal error processing request: " + e.getMessage()
             );
         }
+    }
+
+    /**
+     * Enriches the connection context with authenticated user identity if the request contains
+     * a valid session token and session manager is configured.
+     *
+     * @param request the request envelope
+     * @param context the current connection context
+     * @return enriched connection context (or original context if unauthenticated)
+     */
+    public ConnectionContext enrichContext(RequestEnvelope request, ConnectionContext context) {
+        ConnectionContext ctx = context;
+        if (sessionManager != null && request != null) {
+            String token = resolveToken(request);
+            if (token != null && !token.isBlank()) {
+                Optional<SessionContext> sessionOpt = sessionManager.validateSession(token);
+                if (sessionOpt.isPresent()) {
+                    SessionContext session = sessionOpt.get();
+                    String roleName = session.role() != null ? session.role().name() : null;
+                    if (ctx != null) {
+                        ctx = ctx.withUser(session.userId(), session.email(), roleName);
+                    } else {
+                        ctx = new ConnectionContext(null, session.userId(), session.email(), roleName, null);
+                    }
+                }
+            }
+        }
+        return ctx;
+    }
+
+    private String resolveToken(RequestEnvelope request) {
+        if (request == null) {
+            return null;
+        }
+        if (request.token() != null && !request.token().isBlank()) {
+            return request.token().strip();
+        }
+        if (request.payload() != null && request.payload().hasNonNull("token")) {
+            return request.payload().get("token").asText().strip();
+        }
+        return null;
     }
 }

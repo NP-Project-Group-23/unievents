@@ -57,6 +57,15 @@ public class JdbcUserRepository implements UserRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    @jakarta.annotation.PostConstruct
+    public void ensureSchema() {
+        try {
+            jdbcTemplate.execute("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'STUDENT'");
+        } catch (Exception ignored) {
+            // Safe fallback if table does not exist yet or running in custom H2 mock
+        }
+    }
+
     @Override
     public User save(User user) {
         if (user == null) {

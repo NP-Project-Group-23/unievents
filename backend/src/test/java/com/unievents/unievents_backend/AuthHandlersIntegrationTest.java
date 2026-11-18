@@ -3,6 +3,7 @@ package com.unievents.unievents_backend;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.unievents.unievents_backend.domain.model.Role;
+import com.unievents.unievents_backend.domain.model.User;
 import com.unievents.unievents_backend.domain.repository.JdbcUserRepository;
 import com.unievents.unievents_backend.domain.service.BCryptPasswordHasher;
 import com.unievents.unievents_backend.domain.service.ContextBridge;
@@ -73,14 +74,26 @@ class AuthHandlersIntegrationTest {
         authService = new StudentAuthService(userRepository, passwordHasher, sessionManager);
         contextBridge = new ContextBridge(sessionManager);
 
-        RequestDispatcher dispatcher = new RequestDispatcher();
+        RequestDispatcher dispatcher = new RequestDispatcher(sessionManager);
         AuthHandlersConfig.registerHandlers(
                 dispatcher,
-                new RegisterHandler(authService),
+                new RegisterHandler(authService, sessionManager),
                 new LoginHandler(authService),
                 new LogoutHandler(sessionManager),
                 new SessionCheckHandler(sessionManager)
         );
+
+        // Context inspector handler for verifying connection context enrichment
+        dispatcher.registerHandler("INSPECT_CONTEXT", (request, context) -> {
+            ObjectNode data = MAPPER.createObjectNode();
+            data.put("authenticated", context != null && context.isAuthenticated());
+            if (context != null && context.isAuthenticated()) {
+                data.put("userId", context.userId());
+                data.put("email", context.email());
+                data.put("role", context.role());
+            }
+            return ResponseEnvelope.success(request.requestId(), data);
+        });
 
         // Downstream BookingService simulation consuming contextBridge
         dispatcher.registerHandler("BOOK_SEAT", (request, context) -> {
@@ -206,5 +219,107 @@ class AuthHandlersIntegrationTest {
         ResponseEnvelope logoutAgainResp = client.sendSync(logoutReq);
         assertTrue(logoutAgainResp.isError());
         assertEquals(ErrorCode.UNAUTHENTICATED.name(), logoutAgainResp.errorCode());
+    }
+
+    @Test
+    @DisplayName("public registration attempting role ADMIN is blocked with FORBIDDEN")
+    void testPublicRegisterCannotEscalateToAdmin() throws Exception {
+        ObjectNode hackPayload = MAPPER.createObjectNode();
+        hackPayload.put("name", "Adversary");
+        hackPayload.put("email", "hacker@evil.com");
+        hackPayload.put("password", "strongPassword123");
+        hackPayload.put("role", "ADMIN");
+
+        RequestEnvelope regRequest = RequestEnvelope.of("REGISTER", hackPayload);
+        ResponseEnvelope regResponse = client.sendSync(regRequest);
+
+        assertNotNull(regResponse);
+        assertTrue(regResponse.isError(), "Public registration specifying ADMIN must be rejected");
+        assertEquals(ErrorCode.FORBIDDEN.name(), regResponse.errorCode());
+        assertFalse(userRepository.existsByEmail("hacker@evil.com"), "Hacker must not be persisted in database");
+    }
+
+    @Test
+    @DisplayName("authenticated admin session can successfully register another admin user")
+    void testAuthenticatedAdminCanRegisterAdminUser() throws Exception {
+        // Create pre-existing admin in repository
+        BCryptPasswordHasher hasher = new BCryptPasswordHasher(4);
+        User adminUser = userRepository.save(new User(
+                null,
+                "Super Admin",
+                "superadmin@uni.edu",
+                hasher.hash("adminPass123"),
+                Role.ADMIN,
+                java.time.Instant.now()
+        ));
+
+        // Authenticate admin to obtain active session
+        com.unievents.unievents_backend.domain.service.AuthResult auth = authService.authenticate("superadmin@uni.edu", "adminPass123");
+        String adminToken = auth.token();
+
+        // Register new admin using adminToken in request
+        ObjectNode newAdminPayload = MAPPER.createObjectNode();
+        newAdminPayload.put("name", "Secondary Admin");
+        newAdminPayload.put("email", "secadmin@uni.edu");
+        newAdminPayload.put("password", "newAdminPass123");
+        newAdminPayload.put("role", "ADMIN");
+
+        RequestEnvelope adminRegReq = RequestEnvelope.of("REGISTER", adminToken, newAdminPayload);
+        ResponseEnvelope adminRegResp = client.sendSync(adminRegReq);
+
+        assertNotNull(adminRegResp);
+        assertTrue(adminRegResp.isSuccess(), "Admin registration by authenticated admin must succeed: " + adminRegResp.errorMessage());
+        assertEquals("ADMIN", adminRegResp.data().get("role").asText());
+        assertEquals("secadmin@uni.edu", adminRegResp.data().get("email").asText());
+
+        User persisted = userRepository.findByEmail("secadmin@uni.edu").orElseThrow();
+        assertEquals(Role.ADMIN, persisted.role());
+    }
+
+    @Test
+    @DisplayName("ConnectionContext is enriched with authenticated userId, email, and role")
+    void testConnectionContextEnrichmentAcrossRequests() throws Exception {
+        // Initial state: unauthenticated
+        RequestEnvelope unauthInspect = RequestEnvelope.of("INSPECT_CONTEXT", null);
+        ResponseEnvelope unauthResp = client.sendSync(unauthInspect);
+        assertTrue(unauthResp.isSuccess());
+        assertFalse(unauthResp.data().get("authenticated").asBoolean(), "Connection should initially be unauthenticated");
+
+        // Register student
+        ObjectNode regPayload = MAPPER.createObjectNode();
+        regPayload.put("name", "Context Student");
+        regPayload.put("email", "context.student@uni.edu");
+        regPayload.put("password", "pass123456");
+
+        ResponseEnvelope regResp = client.sendSync(RequestEnvelope.of("REGISTER", regPayload));
+        assertTrue(regResp.isSuccess());
+        Long studentId = regResp.data().get("id").asLong();
+
+        // Login student
+        ObjectNode loginPayload = MAPPER.createObjectNode();
+        loginPayload.put("email", "context.student@uni.edu");
+        loginPayload.put("password", "pass123456");
+
+        ResponseEnvelope loginResp = client.sendSync(RequestEnvelope.of("LOGIN", loginPayload));
+        assertTrue(loginResp.isSuccess());
+        String token = loginResp.data().get("token").asText();
+
+        // Inspect context with token
+        RequestEnvelope authInspect = RequestEnvelope.of("INSPECT_CONTEXT", token, null);
+        ResponseEnvelope authResp = client.sendSync(authInspect);
+        assertTrue(authResp.isSuccess());
+        assertTrue(authResp.data().get("authenticated").asBoolean(), "ConnectionContext must be authenticated");
+        assertEquals(studentId, authResp.data().get("userId").asLong());
+        assertEquals("context.student@uni.edu", authResp.data().get("email").asText());
+        assertEquals("STUDENT", authResp.data().get("role").asText());
+
+        // Logout
+        ResponseEnvelope logoutResp = client.sendSync(RequestEnvelope.of("LOGOUT", token, null));
+        assertTrue(logoutResp.isSuccess());
+
+        // Inspect context after logout
+        ResponseEnvelope postLogoutResp = client.sendSync(RequestEnvelope.of("INSPECT_CONTEXT", null));
+        assertTrue(postLogoutResp.isSuccess());
+        assertFalse(postLogoutResp.data().get("authenticated").asBoolean(), "ConnectionContext must be unauthenticated after logout");
     }
 }

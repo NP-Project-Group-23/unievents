@@ -16,9 +16,10 @@ public class AuthHandlersConfig {
             RegisterHandler registerHandler,
             LoginHandler loginHandler,
             LogoutHandler logoutHandler,
-            SessionCheckHandler sessionCheckHandler
+            SessionCheckHandler sessionCheckHandler,
+            com.unievents.unievents_backend.domain.service.SessionManager sessionManager
     ) {
-        RequestDispatcher dispatcher = new RequestDispatcher();
+        RequestDispatcher dispatcher = new RequestDispatcher(sessionManager);
         registerHandlers(dispatcher, registerHandler, loginHandler, logoutHandler, sessionCheckHandler);
         return dispatcher;
     }

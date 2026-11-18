@@ -67,22 +67,16 @@ public class SessionManager {
             return Optional.empty();
         }
 
-        SessionContext current = sessions.get(token);
-        if (current == null) {
-            return Optional.empty();
-        }
+        SessionContext updated = sessions.computeIfPresent(token, (key, current) -> {
+            Instant now = Instant.now();
+            if (now.isAfter(current.lastAccessedAt().plus(idleTimeout))) {
+                // computeIfPresent removes the mapping when returning null
+                return null;
+            }
+            return current.withLastAccessedAt(now);
+        });
 
-        Instant now = Instant.now();
-        if (now.isAfter(current.lastAccessedAt().plus(idleTimeout))) {
-            // Idle timeout exceeded
-            sessions.remove(token, current);
-            return Optional.empty();
-        }
-
-        // Touch session with updated lastAccessedAt
-        SessionContext refreshed = current.withLastAccessedAt(now);
-        sessions.put(token, refreshed);
-        return Optional.of(refreshed);
+        return Optional.ofNullable(updated);
     }
 
     /**

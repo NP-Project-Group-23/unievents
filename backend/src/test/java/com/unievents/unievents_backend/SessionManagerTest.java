@@ -12,6 +12,12 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -124,5 +130,56 @@ class SessionManagerTest {
         assertThrows(InvalidCredentialsException.class, () ->
                 sessionManager.getVerifiedUserId(null)
         );
+    }
+
+    @Test
+    @DisplayName("concurrent validateSession and invalidateSession never resurrects an invalidated session")
+    void testConcurrentValidateAndInvalidateNoResurrection() throws Exception {
+        int iterations = 10_000;
+        ExecutorService pool = Executors.newFixedThreadPool(8);
+        AtomicInteger resurrectedCount = new AtomicInteger(0);
+
+        try {
+            for (int i = 0; i < iterations; i++) {
+                User u = new User((long) i, "User" + i, "u" + i + "@uni.edu", "hash", Role.STUDENT, Instant.now());
+                SessionContext ctx = sessionManager.createSession(u);
+                String token = ctx.token();
+
+                CountDownLatch readyLatch = new CountDownLatch(2);
+                CountDownLatch startLatch = new CountDownLatch(1);
+
+                Future<?> f1 = pool.submit(() -> {
+                    readyLatch.countDown();
+                    try {
+                        startLatch.await();
+                        sessionManager.validateSession(token);
+                    } catch (InterruptedException ignored) {}
+                });
+
+                Future<?> f2 = pool.submit(() -> {
+                    readyLatch.countDown();
+                    try {
+                        startLatch.await();
+                        sessionManager.invalidateSession(token);
+                    } catch (InterruptedException ignored) {}
+                });
+
+                readyLatch.await();
+                startLatch.countDown();
+
+                f1.get();
+                f2.get();
+
+                if (sessionManager.validateSession(token).isPresent() || sessionManager.getActiveSessionCount() > 0) {
+                    resurrectedCount.incrementAndGet();
+                    sessionManager.invalidateSession(token);
+                }
+            }
+        } finally {
+            pool.shutdown();
+            pool.awaitTermination(5, TimeUnit.SECONDS);
+        }
+
+        assertEquals(0, resurrectedCount.get(), "No invalidated sessions should be resurrected across 10,000 concurrent iterations");
     }
 }
