@@ -19,6 +19,9 @@ tests or migration experiments.
 
 Team documentation:
 
+- [JavaFX desktop dashboard and live seat workflow](docs/DESKTOP_STEP_7.md)
+- [Authenticated UDP seat-change notifications](docs/UDP_STEP_6.md)
+- [Booking TCP operations and commit handoff](docs/BOOKING_STEP_5.md)
 - [Event administration, seat generation and migration setup](docs/EVENTS_STEP_4.md)
 
 - [Verified session authorization and metrics integration](docs/AUTH_METRICS_STEP_3.md)
@@ -26,9 +29,11 @@ Team documentation:
 - [Current TCP protocol, authentication rules and operation contracts](docs/PROTOCOL.md)
 - [JavaFX integration architecture, ownership and configuration plan](docs/ARCHITECTURE.md)
 
-The integration target is JavaFX clients using TCP and UDP, following the full
-UniTicket workload plan. The web features documented below remain the current
-HTTP starter. Desktop launch is pending. The backend now starts the TCP listener
+The JavaFX client now integrates authentication, events, booking, history, admin
+event management and TCP-authoritative UDP refresh. Launch
+`com.unievents.unievents_backend.ui.UniEventsDesktopApplication` from the IDE after
+starting the backend; configure `TCP_HOST` and `TCP_PORT` when needed. The web
+features documented below remain the current HTTP starter. The backend starts the TCP listener
 on `127.0.0.1:9090` through Spring; see [Step 2 wiring and verification](docs/TCP_STEP_2.md).
 
 ### Simple account login

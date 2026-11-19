@@ -106,8 +106,8 @@ deployment. No database migration is applied by this contract-only step.
 1. M1/M2/M5: wire TCP lifecycle and concrete handler to the existing bounded executor.
 2. M1/M5: enforce session/admin rules, adapt/register metrics and test real counters.
 3. M2/M3/M5: event module, schema integration and migration execution.
-4. M3: booking handlers and after-commit event; M5: desktop navigation/history.
-5. M4: subscription/UDP/grid/recovery with M3's booking action.
+4. Completed in Step 5: booking handlers and after-commit event.
+5. Completed in Steps 6–7: subscription/UDP, desktop grid, booking action and recovery.
 6. All: PostgreSQL/TCP races, reconnect, overload, packet loss and packaged demo.
 
 Contract completion means a concrete shared specification exists, not that runtime

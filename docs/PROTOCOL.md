@@ -201,9 +201,9 @@ notification coordination and NAT traversal are not implemented guarantees.
 - M1/M2/M5: Step 2 application lifecycle, concrete socket handler and bounded
   execution-manager wiring passed the selected 86-test regression run; see
   [verification](TCP_STEP_2.md). Full desktop/PostgreSQL verification remains pending.
-- Step 6 registers authenticated renewable UDP subscriptions, asynchronous delivery,
-  cleanup, sequencing and the bounded client listener. JavaFX seat-grid mounting and
-  periodic refresh remain pending. See [UDP status](UDP_STEP_6.md).
+- Step 7 mounts the event browser, paginated seat grid, booking/history and role-gated
+  administration in JavaFX. It renews UDP subscriptions and reconciles seats over TCP.
+  See [desktop status](DESKTOP_STEP_7.md).
 - Step 3 replaces the metrics-specific envelope with `ResponseEnvelope`, registers
   GET_METRICS and applies ADMIN authorization to TCP and HTTP monitoring.
 - M5: retain the fields of `ServerMetricsSnapshot`; `totalCompletedTasks` counts
