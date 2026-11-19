@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
     "spring.config.import=",
     "spring.datasource.url=jdbc:h2:mem:booking-service;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
     "spring.datasource.username=sa", "spring.datasource.password=",
-    "spring.jpa.hibernate.ddl-auto=validate", "spring.sql.init.mode=always",
+    "spring.jpa.hibernate.ddl-auto=validate", "spring.sql.init.mode=never", "spring.flyway.enabled=true",
     "spring.sql.init.schema-locations=classpath:booking-users.sql,classpath:db/migration/V1__create_seats_and_bookings.sql"
 })
 class BookingServiceTests {
@@ -31,10 +31,13 @@ class BookingServiceTests {
     void setup() {
         db.update("DELETE FROM bookings");
         db.update("DELETE FROM seats");
+        db.update("DELETE FROM events");
         db.update("DELETE FROM app_users");
         db.update("INSERT INTO app_users(name,email,password_hash) VALUES ('One','one@example.com','test'),('Two','two@example.com','test')");
         userId = db.queryForObject("SELECT id FROM app_users WHERE email='one@example.com'", Long.class);
         otherUserId = db.queryForObject("SELECT id FROM app_users WHERE email='two@example.com'", Long.class);
+        db.update("INSERT INTO events(id,title,description,venue,starts_at,capacity,created_by) OVERRIDING SYSTEM VALUE VALUES (10,'Event 10','','Hall',?,100,?),(11,'Event 11','','Hall',?,100,?)",
+            java.time.OffsetDateTime.now().plusDays(5), userId, java.time.OffsetDateTime.now().plusDays(6), userId);
         seat = seats.saveAndFlush(new Seat(10L, "A1"));
     }
 

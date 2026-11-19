@@ -78,11 +78,11 @@ Never serialize JPA entities or Spring `Page` directly as the public contract.
 | `LOGIN` | M1 | Public | `email,password` | `token,userId,name,email,role` | Present |
 | `LOGOUT` | M1 | Session | `{}` | `message` | Present |
 | `SESSION_CHECK` | M1 | Session | `{}` | `valid,token,userId,email,role` | Present |
-| `LIST_EVENTS` | M2 | Session | `page?,size?` | Page of EventSummary | Pending |
-| `GET_EVENT` | M2 | Session | `eventId` | EventSummary | Pending |
-| `CREATE_EVENT` | M2 | ADMIN | `title,description?,venue,startsAt,capacity` | EventSummary | Pending |
-| `UPDATE_EVENT` | M2 | ADMIN | `eventId,title,description,venue,startsAt` | EventSummary | Pending |
-| `DELETE_EVENT` | M2 | ADMIN | `eventId` | `eventId,deleted:true` | Pending |
+| `LIST_EVENTS` | M2 | Session | `page?,size?` | Page of EventSummary | Registered in Step 4 |
+| `GET_EVENT` | M2 | Session | `eventId` | EventSummary | Registered in Step 4 |
+| `CREATE_EVENT` | M2 | ADMIN | `title,description?,venue,startsAt,capacity` | EventSummary | Registered in Step 4 |
+| `UPDATE_EVENT` | M2 | ADMIN | `eventId,title,description?,venue,startsAt` | EventSummary | Registered in Step 4; omitted description clears it |
+| `DELETE_EVENT` | M2 | ADMIN | `eventId` | `eventId,deleted:true` | Registered in Step 4 |
 | `GET_SEATS` | M3 | Session | `eventId,page?,size?` | `eventId,items:[SeatSummary],page,size,totalElements,totalPages` | Pending |
 | `BOOK_SEAT` | M3 | Session | `eventId,seatId` | BookingResult | Pending |
 | `MY_BOOKINGS` | M3 | Session | `page?,size?` | Page of BookingResult for verified user | Pending |
@@ -201,7 +201,8 @@ notification coordination and NAT traversal are not implemented guarantees.
 - M1/M2/M5: Step 2 application lifecycle, concrete socket handler and bounded
   execution-manager wiring passed the selected 86-test regression run; see
   [verification](TCP_STEP_2.md). Full desktop/PostgreSQL verification remains pending.
-- M2/M3/M4: implement pending operations, response mapping and DTO validation.
+- Step 4 implements event operations and DTO validation; M3/M4 booking and UDP
+  protocol operations remain pending. See [event/migration status](EVENTS_STEP_4.md).
 - Step 3 replaces the metrics-specific envelope with `ResponseEnvelope`, registers
   GET_METRICS and applies ADMIN authorization to TCP and HTTP monitoring.
 - M5: retain the fields of `ServerMetricsSnapshot`; `totalCompletedTasks` counts

@@ -63,6 +63,9 @@ class ServerThreadPoolExecutorTests {
 
             boolean completed = latch.await(5, TimeUnit.SECONDS);
             assertThat(completed).isTrue();
+            // The task's latch fires before ThreadPoolExecutor.afterExecute updates metrics.
+            executor.shutdown();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
 
             ServerMetricsSnapshot snapshot = executor.getMetricsSnapshot();
             assertThat(snapshot.totalSubmittedTasks()).isEqualTo(5);

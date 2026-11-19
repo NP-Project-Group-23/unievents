@@ -1,5 +1,10 @@
 # Integration architecture and configuration
 
+Implementation status: [Step 4](EVENTS_STEP_4.md) adds event operations, seat
+generation, Flyway configuration and event foreign keys. The migration handoff
+below describes ownership; use the Step 4 guide for current executable setup and
+existing-schema adoption. Shared database deployment is still pending.
+
 Baseline selected for the current implementation plan, 2026-11-19: the supplied
 UniTicket workload document's JavaFX desktop architecture. Existing web login and
 monitoring remain available, but do not replace the desktop/TCP/UDP demonstration.
@@ -58,7 +63,7 @@ in the next integration step; this table is not a claim that setting them works 
 | Setting | Default | Status / owner |
 | --- | --- | --- |
 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | Private environment values | Existing JDBC settings; M5 |
-| `DB_MIGRATION_URL` | No default; direct isolated endpoint for verification | Planned migration connection; M5 |
+| `DB_MIGRATION_URL` | No default; direct isolated endpoint for verification | Explicit migrate profile/Maven plugin implemented; M5 |
 | `TCP_ENABLED` | `true` | Server lifecycle switch; implemented in Step 2 |
 | `TCP_BIND_ADDRESS` | `127.0.0.1` | Server binding implemented; explicitly set LAN bind for demo |
 | `TCP_PORT` | `9090` | Server binding implemented; desktop configuration binding pending |

@@ -1,3 +1,4 @@
+-- Legacy reference only. Runtime initialization is disabled; use Flyway V0-V3.
 CREATE TABLE IF NOT EXISTS app_users (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(100) NOT NULL,

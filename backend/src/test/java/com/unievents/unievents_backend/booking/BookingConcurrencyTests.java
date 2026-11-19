@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
     "spring.datasource.username=sa", "spring.datasource.password=",
     "spring.datasource.hikari.maximum-pool-size=10",
     "spring.datasource.hikari.connection-timeout=10000",
-    "spring.jpa.hibernate.ddl-auto=validate", "spring.sql.init.mode=always",
+    "spring.jpa.hibernate.ddl-auto=validate", "spring.sql.init.mode=never", "spring.flyway.enabled=true",
     "spring.sql.init.schema-locations=classpath:booking-users.sql,classpath:db/migration/V1__create_seats_and_bookings.sql"
 })
 class BookingConcurrencyTests {
@@ -32,12 +32,15 @@ class BookingConcurrencyTests {
     void setup() {
         db.update("DELETE FROM bookings");
         db.update("DELETE FROM seats");
+        db.update("DELETE FROM events");
         db.update("DELETE FROM app_users");
         for (int i = 0; i < CLIENTS; i++) {
             db.update("INSERT INTO app_users(name,email,password_hash) VALUES (?,?,?)",
                 "Student " + i, "student" + i + "@example.com", "test");
         }
         users = db.queryForList("SELECT id FROM app_users ORDER BY id", Long.class);
+        db.update("INSERT INTO events(id,title,description,venue,starts_at,capacity,created_by) OVERRIDING SYSTEM VALUE VALUES (10,'Event 10','','Hall',?,100,?),(11,'Event 11','','Hall',?,100,?)",
+            java.time.OffsetDateTime.now().plusDays(5), users.getFirst(), java.time.OffsetDateTime.now().plusDays(6), users.getFirst());
     }
 
     @RepeatedTest(5)

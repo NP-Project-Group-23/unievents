@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
     "spring.datasource.url=jdbc:h2:mem:booking;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
     "spring.datasource.username=sa", "spring.datasource.password=",
     "spring.jpa.hibernate.ddl-auto=validate",
-    "spring.sql.init.mode=always",
+    "spring.sql.init.mode=never", "spring.flyway.enabled=true",
     "spring.sql.init.schema-locations=classpath:booking-users.sql,classpath:db/migration/V1__create_seats_and_bookings.sql"
 })
 class BookingPersistenceTests {
@@ -35,9 +35,12 @@ class BookingPersistenceTests {
         tx = new TransactionTemplate(manager);
         db.update("DELETE FROM bookings");
         db.update("DELETE FROM seats");
+        db.update("DELETE FROM events");
         db.update("DELETE FROM app_users");
         db.update("INSERT INTO app_users(name,email,password_hash) VALUES ('Student','student@example.com','test')");
         userId = db.queryForObject("SELECT id FROM app_users", Long.class);
+        db.update("INSERT INTO events(id,title,description,venue,starts_at,capacity,created_by) OVERRIDING SYSTEM VALUE VALUES (10,'Event 10','','Hall',?,100,?),(11,'Event 11','','Hall',?,100,?)",
+            java.time.OffsetDateTime.now().plusDays(5), userId, java.time.OffsetDateTime.now().plusDays(6), userId);
     }
 
     @Test

@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 public interface SeatRepository extends JpaRepository<Seat, Long> {
+    void deleteByEventId(Long eventId);
     List<Seat> findByEventIdOrderBySeatNumberAsc(Long eventId);
     List<Seat> findByEventIdAndStatusOrderBySeatNumberAsc(Long eventId, Seat.Status status);
     Optional<Seat> findByIdAndEventId(Long id, Long eventId);

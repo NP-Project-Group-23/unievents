@@ -19,6 +19,8 @@ tests or migration experiments.
 
 Team documentation:
 
+- [Event administration, seat generation and migration setup](docs/EVENTS_STEP_4.md)
+
 - [Verified session authorization and metrics integration](docs/AUTH_METRICS_STEP_3.md)
 
 - [Current TCP protocol, authentication rules and operation contracts](docs/PROTOCOL.md)
@@ -37,7 +39,8 @@ Choose **Create account**, enter your name, email, and a password of at least ei
 characters. Registration signs you in; sign out to try logging back in. Refreshing
 the page restores your current session.
 
-The backend creates `app_users` if it does not exist, stores BCrypt password hashes,
+Provision the schema using the Step 4 migration guide before starting the backend.
+Startup now validates the schema instead of creating tables. It stores BCrypt password hashes,
 and uses an HttpOnly session cookie with CSRF protection. Sessions expire after
 30 idle minutes and are lost when the backend restarts. Accounts remain in Neon.
 This starter does not include email verification, password recovery, or login rate

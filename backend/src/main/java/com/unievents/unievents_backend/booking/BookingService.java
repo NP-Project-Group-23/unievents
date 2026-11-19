@@ -14,10 +14,12 @@ import static com.unievents.unievents_backend.booking.BookingException.Code.*;
 public class BookingService {
     private final SeatRepository seats;
     private final BookingRepository bookings;
+    private final com.unievents.unievents_backend.event.EventRepository events;
 
-    public BookingService(SeatRepository seats, BookingRepository bookings) {
+    public BookingService(SeatRepository seats, BookingRepository bookings, com.unievents.unievents_backend.event.EventRepository events) {
         this.seats = seats;
         this.bookings = bookings;
+        this.events = events;
     }
 
     /** userId must come from the authenticated session or trusted TCP context. */
@@ -27,6 +29,10 @@ public class BookingService {
         if (request == null || !positive(request.eventId()) || !positive(request.seatId())) {
             throw new BookingException(INVALID_REQUEST, "Event and seat IDs must be positive.");
         }
+        var event = events.findForBooking(request.eventId())
+            .orElseThrow(() -> new BookingException(EVENT_NOT_FOUND, "Event not found."));
+        if (!event.getStartsAt().isAfter(java.time.Instant.now()))
+            throw new BookingException(VALIDATION_FAILED, "Booking is closed for this event.");
         seats.findByIdAndEventId(request.seatId(), request.eventId())
             .orElseThrow(() -> new BookingException(SEAT_NOT_FOUND, "Seat not found for this event."));
         if (seats.reserveIfAvailable(request.seatId(), request.eventId()) != 1) {
