@@ -87,8 +87,8 @@ Never serialize JPA entities or Spring `Page` directly as the public contract.
 | `BOOK_SEAT` | M3 | Session | `eventId,seatId` | BookingResult | Registered in Step 5 |
 | `MY_BOOKINGS` | M3 | Session | `page?,size?` | Page of BookingResult for verified user | Registered in Step 5 |
 | `GET_BOOKING` | M3 | Session | `bookingId` | BookingResult for verified user | Registered in Step 5 |
-| `SUBSCRIBE_EVENT` | M4 | Session | `eventId,udpPort` | `subscriptionId,eventId,expiresAt,streamId` | Pending |
-| `UNSUBSCRIBE_EVENT` | M4 | Session | `subscriptionId` | `subscriptionId,removed:true` | Pending |
+| `SUBSCRIBE_EVENT` | M4 | Session | `eventId,udpPort` | `subscriptionId,eventId,expiresAt,streamId` | Registered in Step 6 |
+| `UNSUBSCRIBE_EVENT` | M4 | Session | `subscriptionId` | `subscriptionId,removed` | Registered in Step 6 |
 | `GET_METRICS` | M5 | ADMIN | `{}` | ServerMetricsSnapshot | Registered; TCP/HTTP permissions verified in Step 3 |
 
 Pagination: zero-based `page`, default 0; `size` default 20, range 1–100. Page:
@@ -201,9 +201,9 @@ notification coordination and NAT traversal are not implemented guarantees.
 - M1/M2/M5: Step 2 application lifecycle, concrete socket handler and bounded
   execution-manager wiring passed the selected 86-test regression run; see
   [verification](TCP_STEP_2.md). Full desktop/PostgreSQL verification remains pending.
-- Step 5 registers the four M3 booking/seat operations, scopes ownership to the
-  verified session and emits an identity-free event after commit. M4 UDP subscription
-  and delivery remain pending. See [booking TCP status](BOOKING_STEP_5.md).
+- Step 6 registers authenticated renewable UDP subscriptions, asynchronous delivery,
+  cleanup, sequencing and the bounded client listener. JavaFX seat-grid mounting and
+  periodic refresh remain pending. See [UDP status](UDP_STEP_6.md).
 - Step 3 replaces the metrics-specific envelope with `ResponseEnvelope`, registers
   GET_METRICS and applies ADMIN authorization to TCP and HTTP monitoring.
 - M5: retain the fields of `ServerMetricsSnapshot`; `totalCompletedTasks` counts

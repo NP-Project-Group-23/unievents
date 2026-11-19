@@ -20,7 +20,8 @@ public class AuthHandlersConfig {
             com.unievents.unievents_backend.domain.service.SessionManager sessionManager,
             com.unievents.unievents_backend.network.executor.MetricsProtocolHandler metricsHandler,
             com.unievents.unievents_backend.event.EventProtocolHandler eventHandler,
-            com.unievents.unievents_backend.booking.BookingProtocolHandler bookingHandler
+            com.unievents.unievents_backend.booking.BookingProtocolHandler bookingHandler,
+            com.unievents.unievents_backend.notification.SubscriptionProtocolHandler subscriptionHandler
     ) {
         RequestDispatcher dispatcher = new RequestDispatcher(sessionManager);
         registerHandlers(dispatcher, registerHandler, loginHandler, logoutHandler, sessionCheckHandler);
@@ -31,6 +32,8 @@ public class AuthHandlersConfig {
         for (String type : java.util.List.of("GET_SEATS", "BOOK_SEAT", "MY_BOOKINGS", "GET_BOOKING")) {
             dispatcher.registerHandler(type, bookingHandler);
         }
+        dispatcher.registerHandler("SUBSCRIBE_EVENT", subscriptionHandler);
+        dispatcher.registerHandler("UNSUBSCRIBE_EVENT", subscriptionHandler);
         return dispatcher;
     }
 

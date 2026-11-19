@@ -70,8 +70,8 @@ in the next integration step; this table is not a claim that setting them works 
 | `TCP_HOST` | `127.0.0.1` | Planned desktop destination; M1/M5 |
 | `TCP_REQUEST_TIMEOUT_MS` | `10000` | Existing client constant; planned configuration binding |
 | `TCP_IDLE_TIMEOUT_MS` | `30000` | Server configuration binding implemented |
-| `UDP_CLIENT_PORT` | `0` (OS-selected local port) | Planned client listener; subscribe with actual bound port; M4 |
-| `UDP_SUBSCRIPTION_TTL_SECONDS` | `60` | Planned; M4 |
+| `UDP_CLIENT_PORT` | `0` (OS-selected local port) | Client listener implemented; subscribe with actual bound port; M4 |
+| `UDP_SUBSCRIPTION_TTL_SECONDS` | `60` | Server subscription TTL implemented; M4 |
 | `SEAT_REFRESH_SECONDS` | `15` | Planned; M4 |
 | `EXECUTOR_CORE_POOL_SIZE` | `10` | Existing; M5 |
 | `EXECUTOR_MAX_POOL_SIZE` | `20` | Existing; M5 |
