@@ -14,11 +14,27 @@ cd backend
 .\mvnw.cmd spring-boot:run
 ```
 
+Run the complete local desktop app without Docker or Neon:
+
+```powershell
+cd backend
+.\mvnw.cmd -Plocal-desktop package -DskipTests
+java -jar target\unievents-backend-0.0.1-SNAPSHOT.jar
+```
+
+This starts an embedded file database, runs all migrations, starts the HTTP/TCP/UDP
+backend and opens JavaFX. Local data is stored under `backend/data/` and is ignored
+by Git. The local-only administrator is `admin@unievents.local` / `Admin123!` unless
+`LOCAL_ADMIN_EMAIL` and `LOCAL_ADMIN_PASSWORD` are set before the first launch.
+
 Treat this database as shared team data; use an isolated database for destructive
 tests or migration experiments.
 
 Team documentation:
 
+- [Stage 3 stabilization and demo acceptance evidence](docs/STABILIZATION_STAGE_3.md)
+- [Stage 2 desktop UX completion](docs/DESKTOP_UX_STAGE_2.md)
+- [Stage 1 secure shared Neon integration](docs/NEON_STAGE_1.md)
 - [JavaFX desktop dashboard and live seat workflow](docs/DESKTOP_STEP_7.md)
 - [Authenticated UDP seat-change notifications](docs/UDP_STEP_6.md)
 - [Booking TCP operations and commit handoff](docs/BOOKING_STEP_5.md)

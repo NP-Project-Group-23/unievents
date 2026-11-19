@@ -33,3 +33,5 @@ Desktop.ini
 # Logs
 *.log
 .neon
+# Local embedded database files
+backend/data/

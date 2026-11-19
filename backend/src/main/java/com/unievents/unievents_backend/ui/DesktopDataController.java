@@ -5,9 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.unievents.unievents_backend.network.client.TcpClient;
 import com.unievents.unievents_backend.network.client.UdpSeatChangeListener;
+import com.unievents.unievents_backend.network.client.ConnectionListener;
+import com.unievents.unievents_backend.network.client.ConnectionState;
 import com.unievents.unievents_backend.network.protocol.RequestEnvelope;
 import com.unievents.unievents_backend.network.protocol.ResponseEnvelope;
 import java.net.SocketException;
+import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
@@ -21,6 +24,9 @@ public final class DesktopDataController implements AutoCloseable {
     private final TcpClient tcp;
     private final SessionHolder sessions;
     private final ObjectMapper json;
+    private final Duration renewalInterval;
+    private final Duration reconciliationInterval;
+    private final ConnectionListener connectionListener = this::connectionChanged;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread thread = new Thread(r, "desktop-seat-reconciliation");
         thread.setDaemon(true);
@@ -34,11 +40,21 @@ public final class DesktopDataController implements AutoCloseable {
     private volatile int watchedPage;
     private volatile int watchedSize;
     private volatile Consumer<ResponseEnvelope> seatConsumer;
+    private volatile Runnable onSessionInvalidated;
+    private volatile Runnable onReconnected;
 
     public DesktopDataController(TcpClient tcp, SessionHolder sessions, ObjectMapper json) {
+        this(tcp, sessions, json, Duration.ofSeconds(30), Duration.ofSeconds(15));
+    }
+
+    DesktopDataController(TcpClient tcp, SessionHolder sessions, ObjectMapper json,
+            Duration renewalInterval, Duration reconciliationInterval) {
         this.tcp = Objects.requireNonNull(tcp);
         this.sessions = Objects.requireNonNull(sessions);
         this.json = json != null ? json : new ObjectMapper();
+        this.renewalInterval = positive(renewalInterval, "renewalInterval");
+        this.reconciliationInterval = positive(reconciliationInterval, "reconciliationInterval");
+        tcp.addConnectionListener(connectionListener);
     }
 
     public CompletableFuture<ResponseEnvelope> listEvents(int page, int size) {
@@ -95,8 +111,10 @@ public final class DesktopDataController implements AutoCloseable {
                 refreshWatchedSeats();
             }
         });
-        renewal = scheduler.scheduleAtFixedRate(this::subscribeSafely, 30, 30, TimeUnit.SECONDS);
-        reconciliation = scheduler.scheduleAtFixedRate(this::refreshWatchedSeats, 15, 15, TimeUnit.SECONDS);
+        renewal = scheduler.scheduleAtFixedRate(this::subscribeSafely, renewalInterval.toMillis(),
+            renewalInterval.toMillis(), TimeUnit.MILLISECONDS);
+        reconciliation = scheduler.scheduleAtFixedRate(this::refreshWatchedSeats, reconciliationInterval.toMillis(),
+            reconciliationInterval.toMillis(), TimeUnit.MILLISECONDS);
         return initial;
     }
 
@@ -151,6 +169,26 @@ public final class DesktopDataController implements AutoCloseable {
         return send("LOGOUT", json.createObjectNode());
     }
 
+    public void setOnSessionInvalidated(Runnable callback) { onSessionInvalidated = callback; }
+    public void setOnReconnected(Runnable callback) { onReconnected = callback; }
+
+    private void connectionChanged(ConnectionState oldState, ConnectionState newState) {
+        if (newState != ConnectionState.CONNECTED || oldState == ConnectionState.CONNECTING || !sessions.isAuthenticated()) return;
+        send("SESSION_CHECK", json.createObjectNode()).thenAccept(response -> {
+            if (response == null || !response.isSuccess()) {
+                sessions.clear();
+                stopWatching();
+                Runnable callback = onSessionInvalidated;
+                if (callback != null) callback.run();
+                return;
+            }
+            subscribeSafely();
+            refreshWatchedSeats();
+            Runnable callback = onReconnected;
+            if (callback != null) callback.run();
+        }).exceptionally(ignored -> null);
+    }
+
     private CompletableFuture<ResponseEnvelope> send(String operation, JsonNode payload) {
         String token = sessions.getToken();
         if (token == null) return CompletableFuture.failedFuture(new IllegalStateException("No active session"));
@@ -161,8 +199,14 @@ public final class DesktopDataController implements AutoCloseable {
         return json.createObjectNode().put("page", page).put("size", size);
     }
 
+    private static Duration positive(Duration value, String name) {
+        if (value == null || value.isZero() || value.isNegative()) throw new IllegalArgumentException(name + " must be positive");
+        return value;
+    }
+
     @Override
     public synchronized void close() {
+        tcp.removeConnectionListener(connectionListener);
         stopWatching();
         scheduler.shutdownNow();
     }

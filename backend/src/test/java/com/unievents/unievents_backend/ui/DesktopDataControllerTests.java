@@ -8,6 +8,7 @@ import com.unievents.unievents_backend.network.protocol.ResponseEnvelope;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.time.Duration;
 import javafx.scene.control.TabPane;
 import org.junit.jupiter.api.Test;
 
@@ -80,7 +81,50 @@ class DesktopDataControllerTests {
         try (var controller = new DesktopDataController(tcp, new SessionHolder(), json)) {
             assertThrows(Exception.class, () -> controller.listEvents(0, 20).join());
         }
-        verifyNoInteractions(tcp);
+        verify(tcp, never()).sendAsync(any());
+    }
+
+    @Test
+    void reconnectValidatesSessionBeforeRefreshingDesktop() {
+        TcpClient tcp = mock(TcpClient.class);
+        var listener = org.mockito.ArgumentCaptor.forClass(
+            com.unievents.unievents_backend.network.client.ConnectionListener.class);
+        List<RequestEnvelope> requests = new CopyOnWriteArrayList<>();
+        when(tcp.sendAsync(any())).thenAnswer(invocation -> {
+            RequestEnvelope request = invocation.getArgument(0);
+            requests.add(request);
+            return CompletableFuture.completedFuture(ResponseEnvelope.success(request.requestId(), json.createObjectNode()));
+        });
+        var recovered = new java.util.concurrent.atomic.AtomicBoolean();
+        try (var controller = new DesktopDataController(tcp, session(Role.STUDENT), json)) {
+            controller.setOnReconnected(() -> recovered.set(true));
+            verify(tcp).addConnectionListener(listener.capture());
+            listener.getValue().onConnectionStateChanged(
+                com.unievents.unievents_backend.network.client.ConnectionState.RECONNECTING,
+                com.unievents.unievents_backend.network.client.ConnectionState.CONNECTED);
+        }
+        assertTrue(recovered.get());
+        assertEquals("SESSION_CHECK", requests.getFirst().type());
+    }
+
+    @Test
+    void periodicTcpReconciliationRecoversWhenNoUdpPacketArrives() throws Exception {
+        TcpClient tcp = mock(TcpClient.class);
+        List<RequestEnvelope> requests = new CopyOnWriteArrayList<>();
+        when(tcp.sendAsync(any())).thenAnswer(invocation -> {
+            RequestEnvelope request = invocation.getArgument(0);
+            requests.add(request);
+            var data = json.createObjectNode();
+            if (request.type().equals("SUBSCRIBE_EVENT")) data.put("subscriptionId", "loss-test");
+            return CompletableFuture.completedFuture(ResponseEnvelope.success(request.requestId(), data));
+        });
+        try (var controller = new DesktopDataController(tcp, session(Role.STUDENT), json,
+                Duration.ofSeconds(5), Duration.ofMillis(40))) {
+            controller.watchSeats(8, 0, 20, ignored -> {}).join();
+            Thread.sleep(130);
+        }
+        assertTrue(requests.stream().filter(request -> request.type().equals("GET_SEATS")).count() >= 3,
+            "TCP polling must recover even when no UDP hint is delivered");
     }
 
     @Test

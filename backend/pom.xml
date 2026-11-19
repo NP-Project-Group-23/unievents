@@ -41,7 +41,7 @@
 		<dependency>
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
-			<scope>test</scope>
+			<scope>runtime</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -138,5 +138,14 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<profile>
+			<id>local-desktop</id>
+			<properties>
+				<start-class>com.unievents.unievents_backend.ui.UniEventsLocalLauncher</start-class>
+			</properties>
+		</profile>
+	</profiles>
 
 </project>
