@@ -1,30 +1,27 @@
 package com.unievents.unievents_backend.network.server;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.unievents.unievents_backend.network.protocol.ErrorCode;
 import com.unievents.unievents_backend.network.protocol.FrameCodec;
-import com.unievents.unievents_backend.network.protocol.FrameTooLargeException;
-import com.unievents.unievents_backend.network.protocol.RequestEnvelope;
 import com.unievents.unievents_backend.network.protocol.ResponseEnvelope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
+import java.net.InetSocketAddress;
+import com.unievents.unievents_backend.network.session.SocketClientHandler;
+import com.unievents.unievents_backend.network.executor.ClientExecutionManager;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.net.Socket;
 import java.net.SocketException;
-import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -37,10 +34,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class TcpServer implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(TcpServer.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
     public static final int DEFAULT_IDLE_TIMEOUT_MS = 30000;
 
     private final int requestedPort;
+    private String bindAddress = "127.0.0.1";
+    private ClientExecutionManager executionManager;
     private final RequestDispatcher dispatcher;
     private final ExecutorService executor;
     private final boolean ownsExecutor;
@@ -66,14 +64,22 @@ public class TcpServer implements AutoCloseable {
             this.executor = executor;
             this.ownsExecutor = false;
         } else {
-            this.executor = Executors.newCachedThreadPool(r -> {
+            this.executor = new ThreadPoolExecutor(10, 20, 60, TimeUnit.SECONDS, new ArrayBlockingQueue<>(50), r -> {
                 Thread t = new Thread(r, "TcpServer-Worker");
                 t.setDaemon(true);
                 return t;
-            });
+            }, new ThreadPoolExecutor.AbortPolicy());
             this.ownsExecutor = true;
         }
         this.idleTimeoutMs = idleTimeoutMs > 0 ? idleTimeoutMs : DEFAULT_IDLE_TIMEOUT_MS;
+    }
+
+    /** Production constructor: all accepted clients use the shared execution manager. */
+    public TcpServer(String bindAddress, int port, RequestDispatcher dispatcher,
+                     ClientExecutionManager executionManager, int idleTimeoutMs) {
+        this(port, dispatcher, executionManager.getMetricsService().getExecutor(), idleTimeoutMs);
+        this.bindAddress = java.util.Objects.requireNonNull(bindAddress);
+        this.executionManager = java.util.Objects.requireNonNull(executionManager);
     }
 
     /**
@@ -84,8 +90,15 @@ public class TcpServer implements AutoCloseable {
             log.warn("TcpServer is already running on port {}", getPort());
             return;
         }
-        serverSocket = new ServerSocket(requestedPort);
-        serverSocket.setReuseAddress(true);
+        ServerSocket listener = new ServerSocket();
+        try {
+            listener.setReuseAddress(true);
+            listener.bind(new InetSocketAddress(bindAddress, requestedPort));
+        } catch (IOException | RuntimeException ex) {
+            listener.close();
+            throw ex;
+        }
+        serverSocket = listener;
         running.set(true);
 
         acceptThread = new Thread(this::acceptLoop, "TcpServer-Acceptor-" + serverSocket.getLocalPort());
@@ -120,15 +133,33 @@ public class TcpServer implements AutoCloseable {
         while (running.get()) {
             try {
                 Socket socket = serverSocket.accept();
-                socket.setTcpNoDelay(true);
-                socket.setSoTimeout(idleTimeoutMs);
+                try {
+                    socket.setTcpNoDelay(true);
+                    socket.setSoTimeout(idleTimeoutMs);
+                } catch (IOException ex) {
+                    socket.close();
+                    throw ex;
+                }
                 activeSockets.add(socket);
 
                 try {
-                    executor.submit(() -> handleClient(socket));
+                    var handler = new SocketClientHandler(socket, dispatcher, idleTimeoutMs);
+                    if (executionManager != null) {
+                        activeSockets.remove(socket); // Shared registry owns production sockets.
+                        executionManager.submitClient(handler);
+                    } else {
+                        executor.execute(() -> {
+                            try { handler.run(); }
+                            finally { activeSockets.remove(socket); }
+                        });
+                    }
                 } catch (RejectedExecutionException ree) {
                     log.warn("Thread pool saturated; rejecting client {}", socket.getRemoteSocketAddress());
                     handleOverloadRejection(socket);
+                } catch (RuntimeException ex) {
+                    activeSockets.remove(socket);
+                    socket.close();
+                    log.error("Unable to submit client connection", ex);
                 }
             } catch (SocketException se) {
                 if (!running.get()) {
@@ -166,91 +197,6 @@ public class TcpServer implements AutoCloseable {
     }
 
     /**
-     * Handles read/dispatch loop for an individual client connection.
-     */
-    private void handleClient(Socket socket) {
-        String connectionId = "conn-" + UUID.randomUUID().toString().substring(0, 8);
-        ConnectionContext context = new ConnectionContext(connectionId, null, null, null, socket);
-
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))) {
-
-            while (running.get() && !socket.isClosed()) {
-                String frame;
-                try {
-                    frame = FrameCodec.readFrame(reader);
-                } catch (SocketTimeoutException ste) {
-                    log.info("Connection {} timed out after {} ms idle", connectionId, idleTimeoutMs);
-                    break;
-                } catch (FrameTooLargeException ftle) {
-                    log.warn("Frame too large on connection {}: {}", connectionId, ftle.getMessage());
-                    ResponseEnvelope err = ResponseEnvelope.error(
-                            UUID.randomUUID().toString(),
-                            ErrorCode.FRAME_TOO_LARGE,
-                            ftle.getMessage()
-                    );
-                    try {
-                        FrameCodec.writeEnvelope(writer, err);
-                    } catch (IOException ignored) {}
-                    break; // Close socket after framing limit violation
-                } catch (IOException ioe) {
-                    log.debug("I/O exception reading from client {}: {}", connectionId, ioe.getMessage());
-                    break;
-                }
-
-                if (frame == null) {
-                    // Client disconnected cleanly (EOF)
-                    log.debug("Client {} disconnected (EOF)", connectionId);
-                    break;
-                }
-
-                RequestEnvelope request;
-                try {
-                    request = MAPPER.readValue(frame, RequestEnvelope.class);
-                } catch (JsonProcessingException jpe) {
-                    log.warn("Malformed JSON on connection {}: {}", connectionId, jpe.getMessage());
-                    ResponseEnvelope err = ResponseEnvelope.error(
-                            UUID.randomUUID().toString(),
-                            ErrorCode.MALFORMED_JSON,
-                            "Malformed JSON: " + jpe.getOriginalMessage()
-                    );
-                    FrameCodec.writeEnvelope(writer, err);
-                    continue;
-                }
-
-                ConnectionContext effectiveContext = dispatcher.enrichContext(request, context);
-                if (effectiveContext != null && effectiveContext.isAuthenticated()) {
-                    context = effectiveContext;
-                }
-
-                ResponseEnvelope response = dispatcher.dispatch(request, context);
-
-                if ("LOGIN".equalsIgnoreCase(request.type())
-                        && response.isSuccess()
-                        && response.data() != null) {
-                    Long userId = response.data().hasNonNull("userId") ? response.data().get("userId").asLong() : null;
-                    String email = response.data().hasNonNull("email") ? response.data().get("email").asText() : null;
-                    String role = response.data().hasNonNull("role") ? response.data().get("role").asText() : null;
-                    if (userId != null) {
-                        context = context.withUser(userId, email, role);
-                    }
-                } else if ("LOGOUT".equalsIgnoreCase(request.type()) && response.isSuccess()) {
-                    context = context.withUser(null, null, null);
-                }
-
-                FrameCodec.writeEnvelope(writer, response);
-            }
-        } catch (IOException e) {
-            log.debug("Socket closed or error on connection {}: {}", connectionId, e.getMessage());
-        } finally {
-            activeSockets.remove(socket);
-            try {
-                socket.close();
-            } catch (IOException ignored) {}
-        }
-    }
-
-    /**
      * Gracefully stops the server, closing all sockets and releasing resources.
      */
     public synchronized void stop() {
@@ -269,12 +215,17 @@ public class TcpServer implements AutoCloseable {
             acceptThread.interrupt();
         }
 
+        if (acceptThread != null && acceptThread != Thread.currentThread()) {
+            try { acceptThread.join(2000); }
+            catch (InterruptedException ex) { Thread.currentThread().interrupt(); }
+        }
         for (Socket s : activeSockets) {
-            try {
-                s.close();
-            } catch (IOException ignored) {}
+            try { s.close(); } catch (IOException ignored) { }
         }
         activeSockets.clear();
+        if (executionManager != null) {
+            executionManager.getConnectionManager().closeAll();
+        }
 
         if (ownsExecutor) {
             executor.shutdownNow();

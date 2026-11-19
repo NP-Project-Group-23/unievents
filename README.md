@@ -19,6 +19,14 @@ tests or migration experiments.
 
 Team documentation:
 
+- [Current TCP protocol, authentication rules and operation contracts](docs/PROTOCOL.md)
+- [JavaFX integration architecture, ownership and configuration plan](docs/ARCHITECTURE.md)
+
+The integration target is JavaFX clients using TCP and UDP, following the full
+UniTicket workload plan. The web features documented below remain the current
+HTTP starter. Desktop launch is pending. The backend now starts the TCP listener
+on `127.0.0.1:9090` through Spring; see [Step 2 wiring and verification](docs/TCP_STEP_2.md).
+
 ### Simple account login
 
 Start the backend with the command above. In a second terminal, run `cd frontend`,
@@ -41,9 +49,11 @@ Endpoints: `GET /api/auth/csrf`, `POST /api/auth/register`, `POST /api/auth/logi
 `GET /api/auth/me`, and `POST /api/auth/logout`. POST requests require the token
 and header name returned by the CSRF endpoint, using the same session cookie.
 
-Run `backend/mvnw.cmd -f backend/pom.xml test` for backend checks. Authentication
-flow tests use H2; the existing application context test verifies your configured
-PostgreSQL connection.
+Run `backend/mvnw.cmd -f backend/pom.xml test` for backend checks. The default
+test configuration uses isolated H2 and ephemeral TCP ports; the application
+context test does not verify the shared PostgreSQL connection. JavaFX tests
+may require a graphical environment. See the Step 2 document for the verified
+server regression command.
 
 - [Workload, architecture, milestones, and acceptance criteria](docs/TEAM_WORKLOAD.md)
 - [Daily Git workflow, pull requests, and conflict recovery](docs/GIT_GUIDE.md)
