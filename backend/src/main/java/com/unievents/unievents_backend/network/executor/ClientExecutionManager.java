@@ -80,11 +80,15 @@ public class ClientExecutionManager {
                     oe.getMessage());
 
             // Backpressure notification to client
-            handler.onOverload(oe);
-
-            // Clean up connection registry
-            connectionManager.unregister(connectionId);
+            try {
+                handler.onOverload(oe);
+            } finally {
+                connectionManager.unregister(connectionId);
+            }
             return false;
+        } catch (RuntimeException ex) {
+            connectionManager.unregister(connectionId);
+            throw ex;
         }
     }
 

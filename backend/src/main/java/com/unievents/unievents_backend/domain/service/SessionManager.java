@@ -93,6 +93,17 @@ public class SessionManager {
         return Instant.now().isAfter(current.lastAccessedAt().plus(idleTimeout));
     }
 
+    /** Checks liveness without extending the sliding idle window. */
+    public boolean isActive(String token) {
+        if (token == null || token.isBlank()) return false;
+        final boolean[] active = {false};
+        sessions.computeIfPresent(token, (key, current) -> {
+            active[0] = !Instant.now().isAfter(current.lastAccessedAt().plus(idleTimeout));
+            return active[0] ? current : null;
+        });
+        return active[0];
+    }
+
     /**
      * Explicitly invalidates and terminates a session.
      *

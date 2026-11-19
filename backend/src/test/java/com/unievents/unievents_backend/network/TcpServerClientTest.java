@@ -196,7 +196,11 @@ class TcpServerClientTest {
     @Test
     @DisplayName("Verify client request timeout triggers TimeoutException")
     void testRequestTimeout() throws Exception {
-        RequestDispatcher dispatcher = new RequestDispatcher();
+        var sessions = new com.unievents.unievents_backend.domain.service.SessionManager();
+        String token = sessions.createSession(new com.unievents.unievents_backend.domain.model.User(
+            1L, "Student", "student@example.com", "hash",
+            com.unievents.unievents_backend.domain.model.Role.STUDENT, java.time.Instant.now())).token();
+        RequestDispatcher dispatcher = new RequestDispatcher(sessions);
         // Register an intentionally delayed handler
         dispatcher.registerHandler("SLOW_OP", (req, ctx) -> {
             try {
@@ -212,7 +216,7 @@ class TcpServerClientTest {
             client.setHostAndPort("127.0.0.1", server.getPort());
             client.connect();
 
-            RequestEnvelope req = RequestEnvelope.of("SLOW_OP", null);
+            RequestEnvelope req = RequestEnvelope.of("SLOW_OP", token, null);
             CompletableFuture<ResponseEnvelope> future = client.sendAsync(req, Duration.ofMillis(250));
 
             ExecutionException ex = assertThrows(ExecutionException.class, () -> future.get(1000, TimeUnit.MILLISECONDS));

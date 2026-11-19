@@ -1,5 +1,10 @@
 # UniEvents team workload guide
 
+> Current integration baseline (2026-11-19): use [ARCHITECTURE.md](ARCHITECTURE.md)
+> and [PROTOCOL.md](PROTOCOL.md). The supplied full workload plan selects JavaFX
+> clients with TCP/UDP. The browser gateway proposal and conflicting ownership or
+> framing suggestions below are historical; consult the new contracts for new work.
+
 This proposed plan follows `NP project initial idea.docx`: five members, five network programming concepts, student accounts, event management, seat booking, and real-time updates. Names and deadlines were not supplied; replace M1–M5 with actual names and agree dates before starting. The folders and interfaces below are proposed work, not implemented functionality.
 
 ## 1. Scope and working agreement

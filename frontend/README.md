@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# UniEvents frontend
 
-## Getting Started
+The Next.js frontend is a complete browser client for the UniEvents TCP backend. A server-side route handler connects to the Java TCP server; raw database credentials and TCP session tokens are never exposed to browser JavaScript.
 
-First, run the development server:
+## Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Student registration, login, restored sessions, and logout.
+- Paginated event discovery and event details.
+- Responsive visual seat selection with five-second authoritative TCP refreshes.
+- Atomic seat booking feedback and private booking history.
+- Role-gated event creation, editing, deletion, and automatic seat generation.
+- Role-gated ExecutorService/server metrics.
+- Mobile, tablet, and desktop layouts with loading, empty, error, and confirmation states.
+
+Browsers cannot receive the Java UDP datagrams directly. While an event is open, the browser requests an authoritative `GET_SEATS` snapshot every five seconds. The JavaFX client remains the direct UDP demonstration client.
+
+## Run locally
+
+Start the backend first:
+
+```powershell
+cd backend
+.\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then start the frontend in another terminal:
 
-You can start editing the page by modifying `src/app/page.tsx`. The page auto-updates as you edit the file.
+```powershell
+cd frontend
+Copy-Item .env.example .env.local
+npm install
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open `http://localhost:3000`.
 
-## Learn More
+The local administrator defaults to `admin@unievents.local` / `Admin123!`. Override `LOCAL_ADMIN_EMAIL` and `LOCAL_ADMIN_PASSWORD` before the backend's first local startup when different demo credentials are required.
 
-To learn more about Next.js, take a look at the following resources:
+## Configuration
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `TCP_HOST` | `127.0.0.1` | TCP backend host used only by the Next.js server |
+| `TCP_PORT` | `9090` | TCP backend port |
+| `TCP_REQUEST_TIMEOUT_MS` | `10000` | Gateway request timeout |
+| `BACKEND_URL` | `http://127.0.0.1:8080` | Legacy HTTP auth/metrics proxy target |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Do not prefix TCP settings or database credentials with `NEXT_PUBLIC_`.
 
-## Deploy on Vercel
+## Verify
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```powershell
+npm run lint
+npm test
+npm run build
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The automated suite covers TCP framing/timeouts, gateway authentication and cookie security, operation allow-listing, backend error mapping, authentication UI, and booking conflict feedback.

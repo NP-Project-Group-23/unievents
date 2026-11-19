@@ -2,12 +2,16 @@ package com.unievents.unievents_backend.seat;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 public interface SeatRepository extends JpaRepository<Seat, Long> {
+    void deleteByEventId(Long eventId);
+    Page<Seat> findByEventIdOrderByIdAsc(Long eventId, Pageable pageable);
     List<Seat> findByEventIdOrderBySeatNumberAsc(Long eventId);
     List<Seat> findByEventIdAndStatusOrderBySeatNumberAsc(Long eventId, Seat.Status status);
     Optional<Seat> findByIdAndEventId(Long id, Long eventId);

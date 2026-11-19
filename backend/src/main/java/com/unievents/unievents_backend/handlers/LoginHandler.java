@@ -64,7 +64,7 @@ public class LoginHandler implements RequestHandler {
         } catch (InvalidCredentialsException e) {
             return ResponseEnvelope.error(request.requestId(), ErrorCode.INVALID_CREDENTIALS, e.getMessage());
         } catch (Exception e) {
-            return ResponseEnvelope.error(request.requestId(), ErrorCode.INTERNAL_ERROR, "Login processing error: " + e.getMessage());
+            return ResponseEnvelope.error(request.requestId(), ErrorCode.INTERNAL_ERROR, "Login processing error.");
         }
     }
 }

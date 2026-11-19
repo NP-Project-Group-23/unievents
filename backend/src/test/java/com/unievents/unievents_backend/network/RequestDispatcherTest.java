@@ -19,10 +19,15 @@ class RequestDispatcherTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private RequestDispatcher dispatcher;
     private ConnectionContext dummyContext;
+    private String token;
 
     @BeforeEach
     void setUp() {
-        dispatcher = new RequestDispatcher();
+        var sessions = new com.unievents.unievents_backend.domain.service.SessionManager();
+        token = sessions.createSession(new com.unievents.unievents_backend.domain.model.User(
+            42L, "Student", "student@uni.edu", "hash",
+            com.unievents.unievents_backend.domain.model.Role.STUDENT, java.time.Instant.now())).token();
+        dispatcher = new RequestDispatcher(sessions);
         dummyContext = new ConnectionContext("conn-test-1", 42L, "student@uni.edu", "STUDENT", null);
     }
 
@@ -64,7 +69,7 @@ class RequestDispatcherTest {
             return ResponseEnvelope.success(req.requestId(), data);
         });
 
-        RequestEnvelope req = RequestEnvelope.of("GET_PROFILE", null);
+        RequestEnvelope req = RequestEnvelope.of("GET_PROFILE", token, null);
         ResponseEnvelope resp = dispatcher.dispatch(req, dummyContext);
 
         assertNotNull(resp);
@@ -114,13 +119,13 @@ class RequestDispatcherTest {
             throw new RuntimeException("Simulated database failure");
         });
 
-        RequestEnvelope req = RequestEnvelope.of("FAILING_OP", null);
+        RequestEnvelope req = RequestEnvelope.of("FAILING_OP", token, null);
         ResponseEnvelope resp = dispatcher.dispatch(req, dummyContext);
 
         assertNotNull(resp);
         assertTrue(resp.isError());
         assertEquals(ErrorCode.INTERNAL_ERROR.name(), resp.errorCode());
-        assertTrue(resp.errorMessage().contains("Simulated database failure"));
+        assertFalse(resp.errorMessage().contains("Simulated database failure"));
     }
 
     @Test
@@ -130,9 +135,9 @@ class RequestDispatcherTest {
                 ResponseEnvelope.success(req.requestId(), MAPPER.createObjectNode().put("matched", true))
         );
 
-        RequestEnvelope req1 = RequestEnvelope.of("CUSTOM_ACTION", null);
-        RequestEnvelope req2 = RequestEnvelope.of("custom_action", null);
-        RequestEnvelope req3 = RequestEnvelope.of("CuStOm_AcTiOn", null);
+        RequestEnvelope req1 = RequestEnvelope.of("CUSTOM_ACTION", token, null);
+        RequestEnvelope req2 = RequestEnvelope.of("custom_action", token, null);
+        RequestEnvelope req3 = RequestEnvelope.of("CuStOm_AcTiOn", token, null);
 
         assertTrue(dispatcher.dispatch(req1, dummyContext).isSuccess());
         assertTrue(dispatcher.dispatch(req2, dummyContext).isSuccess());

@@ -1,44 +1,46 @@
 package com.unievents.unievents_backend.network.executor;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.unievents.unievents_backend.network.protocol.*;
+import com.unievents.unievents_backend.network.server.*;
 import org.springframework.stereotype.Component;
 
-import java.util.Objects;
-
-/**
- * Protocol handler for the {@code GET_METRICS} operation specified in the UniEvents
- * team workload agreement (Section 5).
- * <p>
- * Registered with Member 01's TCP request dispatcher to supply live server counters
- * over raw TCP sockets.
- */
+/** GET_METRICS adapter; registered and authorized by the shared dispatcher. */
 @Component
-public class MetricsProtocolHandler {
-
+public class MetricsProtocolHandler implements RequestHandler {
     public static final String OPERATION_TYPE = "GET_METRICS";
-
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     private final ServerMetricsService metricsService;
 
     public MetricsProtocolHandler(ServerMetricsService metricsService) {
-        this.metricsService = Objects.requireNonNull(metricsService, "metricsService must not be null");
+        this.metricsService = java.util.Objects.requireNonNull(metricsService);
     }
 
-    /**
-     * Processes a {@code GET_METRICS} request and generates a standard protocol response envelope.
-     *
-     * @param requestId the correlation ID from the client request
-     * @return structured response envelope containing the authentic metrics snapshot
-     */
-    public MetricsEnvelope handle(String requestId) {
-        String id = (requestId != null && !requestId.isBlank()) ? requestId : "req-" + System.currentTimeMillis();
-        ServerMetricsSnapshot snapshot = metricsService.getMetricsSnapshot();
-        return new MetricsEnvelope(id, OPERATION_TYPE, "SUCCESS", snapshot, null);
+    @Override
+    public ResponseEnvelope handle(RequestEnvelope request, ConnectionContext context) {
+        if (context == null || !context.isAuthenticated()) {
+            return ResponseEnvelope.error(request.requestId(), ErrorCode.UNAUTHENTICATED, "Authentication required.");
+        }
+        if (!"ADMIN".equals(context.role())) {
+            return ResponseEnvelope.error(request.requestId(), ErrorCode.FORBIDDEN, "Administrator privilege required.");
+        }
+        var snapshot = metricsService.getMetricsSnapshot();
+        var data = MAPPER.createObjectNode();
+        data.put("timestamp", snapshot.timestamp().toString());
+        data.put("activeWorkers", snapshot.activeWorkers());
+        data.put("currentPoolSize", snapshot.currentPoolSize());
+        data.put("corePoolSize", snapshot.corePoolSize());
+        data.put("maxPoolSize", snapshot.maxPoolSize());
+        data.put("queuedTasks", snapshot.queuedTasks());
+        data.put("queueRemainingCapacity", snapshot.queueRemainingCapacity());
+        data.put("totalSubmittedTasks", snapshot.totalSubmittedTasks());
+        data.put("totalCompletedTasks", snapshot.totalCompletedTasks());
+        data.put("totalRejectedTasks", snapshot.totalRejectedTasks());
+        data.put("activeConnections", snapshot.activeConnections());
+        data.put("peakActiveWorkers", snapshot.peakActiveWorkers());
+        data.put("averageExecutionTimeMs", snapshot.averageExecutionTimeMs());
+        data.put("maxExecutionTimeMs", snapshot.maxExecutionTimeMs());
+        data.put("state", snapshot.state());
+        return ResponseEnvelope.success(request.requestId(), data);
     }
-
-    public record MetricsEnvelope(
-            String requestId,
-            String type,
-            String status,
-            ServerMetricsSnapshot data,
-            String errorCode
-    ) {}
 }

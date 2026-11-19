@@ -95,13 +95,8 @@ public class ClientConnectionManager {
     @PreDestroy
     public void closeAll() {
         log.info("Closing all active client connections (count: {})...", activeConnections.size());
-        for (ClientConnection connection : activeConnections.values()) {
-            try {
-                connection.close();
-            } catch (IOException e) {
-                log.debug("Error during shutdown close of '{}': {}", connection.getConnectionId(), e.getMessage());
-            }
+        for (String connectionId : List.copyOf(activeConnections.keySet())) {
+            unregister(connectionId);
         }
-        activeConnections.clear();
     }
 }

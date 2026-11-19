@@ -23,7 +23,8 @@ public class AuthUiCoordinator extends BorderPane {
 
     public enum ViewType {
         LOGIN,
-        REGISTER
+        REGISTER,
+        DASHBOARD
     }
 
     private final TcpClient tcpClient;
@@ -32,6 +33,8 @@ public class AuthUiCoordinator extends BorderPane {
     private final RegisterView registerView;
     private final SessionHolder sessionHolder;
     private final StackPane centerContainer;
+    private final ObjectMapper objectMapper;
+    private DesktopDashboardView dashboardView;
 
     private ViewType currentViewType = ViewType.LOGIN;
     private Consumer<SessionHolder.ClientSession> onAuthenticationComplete;
@@ -42,6 +45,7 @@ public class AuthUiCoordinator extends BorderPane {
 
     public AuthUiCoordinator(TcpClient tcpClient, ObjectMapper objectMapper) {
         this.tcpClient = Objects.requireNonNull(tcpClient, "tcpClient must not be null");
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
         this.sessionHolder = new SessionHolder();
 
         // 1. Connection Indicator
@@ -67,6 +71,7 @@ public class AuthUiCoordinator extends BorderPane {
             }
 
             sessionHolder.setSession(token, userId, name, email, role);
+            showDashboard();
 
             if (onAuthenticationComplete != null) {
                 onAuthenticationComplete.accept(sessionHolder.getSession());
@@ -107,6 +112,7 @@ public class AuthUiCoordinator extends BorderPane {
      * Transitions view to {@link LoginView}.
      */
     public void showLoginView() {
+        closeDashboard();
         this.currentViewType = ViewType.LOGIN;
         FxThreadUtils.runOnFxThread(() -> {
             centerContainer.getChildren().setAll(loginView);
@@ -118,6 +124,7 @@ public class AuthUiCoordinator extends BorderPane {
      * Transitions view to {@link RegisterView}.
      */
     public void showRegisterView() {
+        closeDashboard();
         this.currentViewType = ViewType.REGISTER;
         FxThreadUtils.runOnFxThread(() -> {
             centerContainer.getChildren().setAll(registerView);
@@ -130,7 +137,30 @@ public class AuthUiCoordinator extends BorderPane {
     }
 
     public Node getCurrentView() {
-        return currentViewType == ViewType.LOGIN ? loginView : registerView;
+        return switch (currentViewType) {
+            case LOGIN -> loginView;
+            case REGISTER -> registerView;
+            case DASHBOARD -> dashboardView;
+        };
+    }
+
+    public void showDashboard() {
+        if (!sessionHolder.isAuthenticated()) { showLoginView(); return; }
+        closeDashboard();
+        dashboardView = new DesktopDashboardView(tcpClient, sessionHolder, objectMapper);
+        dashboardView.setOnLoggedOut(() -> {
+            sessionHolder.clear();
+            showLoginView();
+        });
+        currentViewType = ViewType.DASHBOARD;
+        centerContainer.getChildren().setAll(dashboardView);
+    }
+
+    private void closeDashboard() {
+        if (dashboardView != null) {
+            dashboardView.close();
+            dashboardView = null;
+        }
     }
 
     public ConnectionIndicator getConnectionIndicator() {
@@ -144,6 +174,8 @@ public class AuthUiCoordinator extends BorderPane {
     public RegisterView getRegisterView() {
         return registerView;
     }
+
+    public DesktopDashboardView getDashboardView() { return dashboardView; }
 
     public SessionHolder getSessionHolder() {
         return sessionHolder;

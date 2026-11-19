@@ -1,5 +1,10 @@
 # Project: UniTicket — Member 01 Architecture Roadmap & Workload Specifications
 
+> Current integration baseline (2026-11-19): [architecture](docs/ARCHITECTURE.md)
+> and [protocol](docs/PROTOCOL.md) consolidate cross-member contracts. This roadmap
+> records Member 1 work; diagrams and implementation claims here do not establish
+> that other members' operations or production wiring are complete.
+
 ## 1. Executive Summary & System Architecture
 
 ### 1.1 Objective

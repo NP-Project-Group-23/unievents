@@ -20,9 +20,17 @@ public class LogoutHandler implements RequestHandler {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final SessionManager sessionManager;
+    private final com.unievents.unievents_backend.notification.UdpSubscriptionManager subscriptions;
 
     public LogoutHandler(SessionManager sessionManager) {
+        this(sessionManager, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public LogoutHandler(SessionManager sessionManager,
+            com.unievents.unievents_backend.notification.UdpSubscriptionManager subscriptions) {
         this.sessionManager = sessionManager;
+        this.subscriptions = subscriptions;
     }
 
     @Override
@@ -45,6 +53,7 @@ public class LogoutHandler implements RequestHandler {
                     "No active session found for the provided token."
             );
         }
+        if (subscriptions != null) subscriptions.removeSession(token);
 
         ObjectNode data = MAPPER.createObjectNode();
         data.put("message", "Logged out successfully");

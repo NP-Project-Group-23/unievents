@@ -60,15 +60,9 @@ public class RegisterHandler implements RequestHandler {
         if (roleStr != null && !roleStr.isBlank()) {
             Role requestedRole = Role.fromString(roleStr);
             if (requestedRole == Role.ADMIN) {
-                boolean isAdmin = false;
-                if (context != null && "ADMIN".equalsIgnoreCase(context.role())) {
-                    isAdmin = true;
-                } else {
-                    String token = resolveToken(request);
-                    if (token != null && sessionManager != null && sessionManager.requireRole(token, Role.ADMIN)) {
-                        isAdmin = true;
-                    }
-                }
+                String token = resolveToken(request);
+                boolean isAdmin = token != null && sessionManager != null
+                    && sessionManager.requireRole(token, Role.ADMIN);
 
                 if (!isAdmin) {
                     return ResponseEnvelope.error(
@@ -96,7 +90,7 @@ public class RegisterHandler implements RequestHandler {
         } catch (AuthValidationException e) {
             return ResponseEnvelope.error(request.requestId(), ErrorCode.VALIDATION_FAILED, e.getMessage());
         } catch (Exception e) {
-            return ResponseEnvelope.error(request.requestId(), ErrorCode.INTERNAL_ERROR, "Registration failed: " + e.getMessage());
+            return ResponseEnvelope.error(request.requestId(), ErrorCode.INTERNAL_ERROR, "Registration failed.");
         }
     }
 
