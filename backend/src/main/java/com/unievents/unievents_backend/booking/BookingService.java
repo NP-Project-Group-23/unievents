@@ -7,6 +7,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import static com.unievents.unievents_backend.booking.BookingException.Code.*;
 
 @Service
@@ -15,11 +18,16 @@ public class BookingService {
     private final SeatRepository seats;
     private final BookingRepository bookings;
     private final com.unievents.unievents_backend.event.EventRepository events;
+    private final ApplicationEventPublisher publisher;
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(BookingService.class);
 
-    public BookingService(SeatRepository seats, BookingRepository bookings, com.unievents.unievents_backend.event.EventRepository events) {
+    public BookingService(SeatRepository seats, BookingRepository bookings,
+                          com.unievents.unievents_backend.event.EventRepository events,
+                          ApplicationEventPublisher publisher) {
         this.seats = seats;
         this.bookings = bookings;
         this.events = events;
+        this.publisher = publisher;
     }
 
     /** userId must come from the authenticated session or trusted TCP context. */
@@ -40,8 +48,10 @@ public class BookingService {
         }
         String reference = "UE-" + UUID.randomUUID().toString().toUpperCase(Locale.ROOT);
         // Let insertion failures propagate so Spring rolls back the reservation too.
-        return BookingResult.from(bookings.saveAndFlush(
+        BookingResult result = BookingResult.from(bookings.saveAndFlush(
             new Booking(userId, request.eventId(), request.seatId(), reference)));
+        registerCommittedEvent(result);
+        return result;
     }
 
     /** First page of history; use the overload to retrieve subsequent pages. */
@@ -73,5 +83,23 @@ public class BookingService {
         if (!positive(userId)) {
             throw new BookingException(UNAUTHENTICATED, "An authenticated user is required.");
         }
+    }
+
+    private void registerCommittedEvent(BookingResult result) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()
+            || !TransactionSynchronizationManager.isSynchronizationActive()) {
+            throw new IllegalStateException("Booking commit event requires an active transaction.");
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override public void afterCommit() {
+                try {
+                    publisher.publishEvent(new BookingCommitted(result.bookingId(), result.eventId(),
+                        result.seatId(), java.time.Instant.now()));
+                } catch (RuntimeException ex) {
+                    // Notification integration must never change an already committed booking result.
+                    log.error("Booking {} committed but notification publication failed", result.bookingId(), ex);
+                }
+            }
+        });
     }
 }

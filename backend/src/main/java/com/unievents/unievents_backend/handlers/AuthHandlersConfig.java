@@ -19,13 +19,17 @@ public class AuthHandlersConfig {
             SessionCheckHandler sessionCheckHandler,
             com.unievents.unievents_backend.domain.service.SessionManager sessionManager,
             com.unievents.unievents_backend.network.executor.MetricsProtocolHandler metricsHandler,
-            com.unievents.unievents_backend.event.EventProtocolHandler eventHandler
+            com.unievents.unievents_backend.event.EventProtocolHandler eventHandler,
+            com.unievents.unievents_backend.booking.BookingProtocolHandler bookingHandler
     ) {
         RequestDispatcher dispatcher = new RequestDispatcher(sessionManager);
         registerHandlers(dispatcher, registerHandler, loginHandler, logoutHandler, sessionCheckHandler);
         dispatcher.registerHandler("GET_METRICS", metricsHandler);
         for (String type : java.util.List.of("CREATE_EVENT", "UPDATE_EVENT", "DELETE_EVENT", "LIST_EVENTS", "GET_EVENT")) {
             dispatcher.registerHandler(type, eventHandler);
+        }
+        for (String type : java.util.List.of("GET_SEATS", "BOOK_SEAT", "MY_BOOKINGS", "GET_BOOKING")) {
+            dispatcher.registerHandler(type, bookingHandler);
         }
         return dispatcher;
     }

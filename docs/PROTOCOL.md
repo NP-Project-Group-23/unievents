@@ -83,10 +83,10 @@ Never serialize JPA entities or Spring `Page` directly as the public contract.
 | `CREATE_EVENT` | M2 | ADMIN | `title,description?,venue,startsAt,capacity` | EventSummary | Registered in Step 4 |
 | `UPDATE_EVENT` | M2 | ADMIN | `eventId,title,description?,venue,startsAt` | EventSummary | Registered in Step 4; omitted description clears it |
 | `DELETE_EVENT` | M2 | ADMIN | `eventId` | `eventId,deleted:true` | Registered in Step 4 |
-| `GET_SEATS` | M3 | Session | `eventId,page?,size?` | `eventId,items:[SeatSummary],page,size,totalElements,totalPages` | Pending |
-| `BOOK_SEAT` | M3 | Session | `eventId,seatId` | BookingResult | Pending |
-| `MY_BOOKINGS` | M3 | Session | `page?,size?` | Page of BookingResult for verified user | Pending |
-| `GET_BOOKING` | M3 | Session | `bookingId` | BookingResult for verified user | Pending extension using existing service |
+| `GET_SEATS` | M3 | Session | `eventId,page?,size?` | `eventId,items:[SeatSummary],page,size,totalElements,totalPages` | Registered in Step 5 |
+| `BOOK_SEAT` | M3 | Session | `eventId,seatId` | BookingResult | Registered in Step 5 |
+| `MY_BOOKINGS` | M3 | Session | `page?,size?` | Page of BookingResult for verified user | Registered in Step 5 |
+| `GET_BOOKING` | M3 | Session | `bookingId` | BookingResult for verified user | Registered in Step 5 |
 | `SUBSCRIBE_EVENT` | M4 | Session | `eventId,udpPort` | `subscriptionId,eventId,expiresAt,streamId` | Pending |
 | `UNSUBSCRIBE_EVENT` | M4 | Session | `subscriptionId` | `subscriptionId,removed:true` | Pending |
 | `GET_METRICS` | M5 | ADMIN | `{}` | ServerMetricsSnapshot | Registered; TCP/HTTP permissions verified in Step 3 |
@@ -201,8 +201,9 @@ notification coordination and NAT traversal are not implemented guarantees.
 - M1/M2/M5: Step 2 application lifecycle, concrete socket handler and bounded
   execution-manager wiring passed the selected 86-test regression run; see
   [verification](TCP_STEP_2.md). Full desktop/PostgreSQL verification remains pending.
-- Step 4 implements event operations and DTO validation; M3/M4 booking and UDP
-  protocol operations remain pending. See [event/migration status](EVENTS_STEP_4.md).
+- Step 5 registers the four M3 booking/seat operations, scopes ownership to the
+  verified session and emits an identity-free event after commit. M4 UDP subscription
+  and delivery remain pending. See [booking TCP status](BOOKING_STEP_5.md).
 - Step 3 replaces the metrics-specific envelope with `ResponseEnvelope`, registers
   GET_METRICS and applies ADMIN authorization to TCP and HTTP monitoring.
 - M5: retain the fields of `ServerMetricsSnapshot`; `totalCompletedTasks` counts
