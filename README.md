@@ -32,6 +32,7 @@ tests or migration experiments.
 
 Team documentation:
 
+- [Stage 4 no-Docker release hardening](docs/RELEASE_STAGE_4.md)
 - [Stage 3 stabilization and demo acceptance evidence](docs/STABILIZATION_STAGE_3.md)
 - [Stage 2 desktop UX completion](docs/DESKTOP_UX_STAGE_2.md)
 - [Stage 1 secure shared Neon integration](docs/NEON_STAGE_1.md)

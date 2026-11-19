@@ -2,6 +2,7 @@ package com.unievents.unievents_backend.ui;
 
 import com.unievents.unievents_backend.UnieventsBackendApplication;
 import com.unievents.unievents_backend.network.client.TcpClient;
+import com.unievents.unievents_backend.network.server.TcpServer;
 import java.time.Duration;
 import javafx.application.Application;
 import javafx.scene.Scene;
@@ -17,17 +18,23 @@ public final class UniEventsLocalApplication extends Application {
 
     @Override
     public void start(Stage stage) throws Exception {
-        spring = new SpringApplicationBuilder(UnieventsBackendApplication.class)
-            .profiles("local")
-            .run();
-        client = new TcpClient("127.0.0.1", 9090, Duration.ofSeconds(10), true);
-        client.connect();
-        coordinator = new AuthUiCoordinator(client);
-        stage.setTitle("UniEvents Local Demo");
-        stage.setScene(new Scene(coordinator, 1100, 720));
-        stage.setMinWidth(850);
-        stage.setMinHeight(600);
-        stage.show();
+        try {
+            spring = new SpringApplicationBuilder(UnieventsBackendApplication.class)
+                .profiles("local")
+                .run();
+            int tcpPort = spring.getBean(TcpServer.class).getPort();
+            client = new TcpClient("127.0.0.1", tcpPort, Duration.ofSeconds(10), true);
+            client.connect();
+            coordinator = new AuthUiCoordinator(client);
+            stage.setTitle("UniEvents Local Demo");
+            stage.setScene(new Scene(coordinator, 1100, 720));
+            stage.setMinWidth(850);
+            stage.setMinHeight(600);
+            stage.show();
+        } catch (Exception failure) {
+            stop();
+            throw failure;
+        }
     }
 
     @Override

@@ -1,93 +1,48 @@
 "use client";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 
-import { FormEvent, useEffect, useState } from "react";
-import Link from "next/link";
+type Role="STUDENT"|"ADMIN"; type User={userId:number;name?:string;email:string;role:Role};
+type EventItem={eventId:number;title:string;description:string;venue:string;startsAt:string;capacity:number};
+type Seat={seatId:number;eventId:number;seatNumber:string;status:"AVAILABLE"|"BOOKED"};
+type Booking={bookingId:number;bookingReference:string;eventId:number;seatId:number;status:string;createdAt:string};
+type Page<T>={items:T[];page:number;totalPages:number;totalElements:number};
+type Metrics={activeWorkers:number;maxPoolSize:number;queuedTasks:number;queueRemainingCapacity:number;totalCompletedTasks:number;totalRejectedTasks:number;activeConnections:number;state:string};
+type View="events"|"bookings"|"admin"|"metrics";
 
-type User = { id: number; name: string; email: string };
+async function api<T>(type:string,payload:object={}):Promise<T>{const response=await fetch("/api/gateway",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type,payload})});const body=await response.json();if(!response.ok||body.status!=="SUCCESS"){const error=new Error(body.errorMessage||"The request failed.") as Error&{code?:string};error.code=body.errorCode;throw error;}return body.data as T;}
+const fmt=(value:string)=>new Intl.DateTimeFormat(undefined,{dateStyle:"medium",timeStyle:"short"}).format(new Date(value));
 
-export default function Home() {
-  const [user, setUser] = useState<User | null>(null);
-  const [register, setRegister] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    fetch("/api/auth/me", { cache: "no-store" })
-      .then(async response => {
-        if (response.ok) setUser(await response.json());
-        else if (response.status !== 401) throw new Error();
-      })
-      .catch(() => setError("Cannot reach the server. Make sure the backend is running."))
-      .finally(() => setLoading(false));
-  }, []);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const fields = new FormData(form);
-    await mutate(register ? "register" : "login", {
-      name: fields.get("name"), email: fields.get("email"), password: fields.get("password"),
-    });
-  }
-
-  async function mutate(action: string, body?: object) {
-    setBusy(true);
-    setError("");
-    try {
-      const csrfResponse = await fetch("/api/auth/csrf", { cache: "no-store" });
-      if (!csrfResponse.ok) throw new Error("Cannot reach the server. Please try again.");
-      const csrf = await csrfResponse.json();
-      const response = await fetch(`/api/auth/${action}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", [csrf.headerName]: csrf.token },
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      if (!response.ok) {
-        const messages: Record<number, string> = {
-          400: "Check your details. Use a valid email and a password of 8–72 bytes when registering.",
-          401: "Incorrect email or password.",
-          403: "Your session expired. Please try again.",
-          409: "This email already has an account. Sign in instead.",
-        };
-        throw new Error(messages[response.status] || "Something went wrong. Please try again.");
-      }
-      setUser(action === "logout" ? null : await response.json());
-      setRegister(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Cannot reach the server.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <main className="auth-shell">
-      <section className="auth-card" aria-labelledby="heading">
-        <p className="brand">UNIEVENTS</p>
-        {loading ? <p role="status">Checking your session…</p> : user ? <>
-          <span className="badge">You’re signed in</span>
-          <h1 id="heading">Welcome, {user.name}.</h1>
-          <p className="subtitle">Your next campus experience starts here.</p>
-          <div className="account"><span>Your account</span><strong>{user.email}</strong></div>
-          <button disabled={busy} onClick={() => mutate("logout")}>{busy ? "Signing out…" : "Sign out"}</button>
-        </> : <>
-          <h1 id="heading">{register ? "Join your campus." : "Welcome back."}</h1>
-          <p className="subtitle">{register ? "Create your UniEvents account to get started." : "Sign in to your UniEvents account."}</p>
-          <form onSubmit={submit} key={register ? "register" : "login"}>
-            {register && <label>Full name<input name="name" autoComplete="name" required maxLength={100} placeholder="Your name" /></label>}
-            <label>Email address<input name="email" type="email" autoComplete="email" required maxLength={254} placeholder="you@university.edu" /></label>
-            <label>Password<input name="password" type="password" autoComplete={register ? "new-password" : "current-password"} required minLength={register ? 8 : 1} maxLength={72} placeholder={register ? "At least 8 characters" : "Your password"} /></label>
-            <button disabled={busy} type="submit">{busy ? "Please wait…" : register ? "Create account" : "Sign in"}</button>
-          </form>
-          <p className="switch">{register ? "Already have an account?" : "New to UniEvents?"} <button className="text-button" disabled={busy} onClick={() => { setRegister(!register); setError(""); }}>{register ? "Sign in" : "Create account"}</button></p>
-        </>}
-        {error && <p className="error" role="alert">{error}</p>}
-      </section>
-      <Link href="/monitoring" style={{ marginTop: 18, fontSize: 13, color: "#215d45", textDecoration: "none", fontWeight: 600 }}>
-        📊 Live Server & Thread Pool Monitor →
-      </Link>
-      <p className="footer-note">Campus moments. Shared experiences.</p>
-    </main>
-  );
+export default function Home(){
+ const [user,setUser]=useState<User|null>(null),[checking,setChecking]=useState(true),[register,setRegister]=useState(false),[view,setView]=useState<View>("events");
+ const [events,setEvents]=useState<Page<EventItem>>({items:[],page:0,totalPages:0,totalElements:0}),[selected,setSelected]=useState<EventItem|null>(null),[seats,setSeats]=useState<Page<Seat>>({items:[],page:0,totalPages:0,totalElements:0}),[bookings,setBookings]=useState<Page<Booking>>({items:[],page:0,totalPages:0,totalElements:0}),[metrics,setMetrics]=useState<Metrics|null>(null);
+ const [busy,setBusy]=useState(false),[notice,setNotice]=useState(""),[error,setError]=useState("");
+ const guard=useCallback((failure:unknown)=>{const problem=failure as Error&{code?:string};if(problem.code==="UNAUTHENTICATED"||problem.code==="SESSION_EXPIRED")setUser(null);setError(problem.message||"Something went wrong.");},[]);
+ useEffect(()=>{api<User>("SESSION_CHECK").then(setUser).catch(()=>setUser(null)).finally(()=>setChecking(false));},[]);
+ const loadEvents=useCallback((page=0)=>api<Page<EventItem>>("LIST_EVENTS",{page,size:12}).then(setEvents).catch(guard),[guard]);
+ const loadBookings=useCallback((page=0)=>api<Page<Booking>>("MY_BOOKINGS",{page,size:20}).then(setBookings).catch(guard),[guard]);
+ const loadSeats=useCallback((item:EventItem,page=0)=>api<Page<Seat>>("GET_SEATS",{eventId:item.eventId,page,size:100}).then(setSeats).catch(guard),[guard]);
+ useEffect(()=>{if(user){loadEvents();loadBookings();}},[user,loadEvents,loadBookings]);
+ useEffect(()=>{if(!selected)return;loadSeats(selected);const timer=setInterval(()=>loadSeats(selected),5000);return()=>clearInterval(timer);},[selected,loadSeats]);
+ async function authenticate(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError("");const f=new FormData(e.currentTarget),credentials={name:f.get("name"),email:f.get("email"),password:f.get("password")};try{if(register)await api("REGISTER",credentials);setUser(await api<User>("LOGIN",{email:credentials.email,password:credentials.password}));setRegister(false);setNotice(register?"Account created successfully.":"Welcome back.");}catch(x){guard(x);}finally{setBusy(false);}}
+ async function logout(){setBusy(true);try{await api("LOGOUT");}catch{}finally{setUser(null);setSelected(null);setBusy(false);}}
+ async function book(seat:Seat){if(!selected||!confirm(`Book seat ${seat.seatNumber} for ${selected.title}?`))return;setBusy(true);setError("");try{const result=await api<Booking>("BOOK_SEAT",{eventId:selected.eventId,seatId:seat.seatId});setNotice(`Booking confirmed: ${result.bookingReference}`);await Promise.all([loadSeats(selected,seats.page),loadBookings()]);}catch(x){guard(x);await loadSeats(selected,seats.page);}finally{setBusy(false);}}
+ async function saveEvent(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError("");const f=new FormData(e.currentTarget),id=Number(f.get("eventId")),payload={title:f.get("title"),description:f.get("description"),venue:f.get("venue"),startsAt:new Date(String(f.get("startsAt"))).toISOString(),capacity:Number(f.get("capacity"))};try{if(id)await api("UPDATE_EVENT",{eventId:id,title:payload.title,description:payload.description,venue:payload.venue,startsAt:payload.startsAt});else await api("CREATE_EVENT",payload);setNotice(id?"Event updated.":"Event created with its seat inventory.");setSelected(null);await loadEvents();e.currentTarget.reset();}catch(x){guard(x);}finally{setBusy(false);}}
+ async function remove(item:EventItem){if(!confirm(`Delete “${item.title}”? Events with bookings cannot be deleted.`))return;setBusy(true);try{await api("DELETE_EVENT",{eventId:item.eventId});setNotice("Event deleted.");setSelected(null);await loadEvents();}catch(x){guard(x);}finally{setBusy(false);}}
+ const loadMetrics=useCallback(()=>api<Metrics>("GET_METRICS").then(setMetrics).catch(guard),[guard]);
+ useEffect(()=>{if(view!=="metrics"||user?.role!=="ADMIN")return;loadMetrics();const timer=setInterval(loadMetrics,3000);return()=>clearInterval(timer);},[view,user?.role,loadMetrics]);
+ if(checking)return <main className="center-page"><div className="loader"/><p>Connecting to UniEvents…</p></main>;
+ if(!user)return <Auth register={register} busy={busy} error={error} submit={authenticate} toggle={()=>{setRegister(!register);setError("");}}/>;
+ const displayName=user.name?.trim()||user.email?.split("@")[0]||"User";
+ return <main className="app-shell"><aside className="sidebar"><div><div className="logo-mark">U</div><p className="eyebrow">UNIEVENTS</p><h1>Campus, booked.</h1></div><nav><Nav active={view==="events"} go={()=>setView("events")}>Discover events</Nav><Nav active={view==="bookings"} go={()=>setView("bookings")}>My bookings</Nav>{user.role==="ADMIN"&&<><Nav active={view==="admin"} go={()=>setView("admin")}>Event studio</Nav><Nav active={view==="metrics"} go={()=>setView("metrics")}>Server health</Nav></>}</nav><div className="profile"><span className="avatar">{displayName.charAt(0).toUpperCase()}</span><div><strong>{displayName}</strong><small>{user.role?.toLowerCase()||"student"}</small></div><button className="icon-button" onClick={logout}>Exit</button></div></aside><section className="workspace"><header className="topbar"><div><p className="eyebrow">UNIVERSITY EVENT TICKETING</p><h2>{view==="events"?"Find your next campus moment":view==="bookings"?"Your ticket history":view==="admin"?"Manage the programme":"Network operations"}</h2></div><span className="live-pill"><i/> TCP connected</span></header>{notice&&<Banner kind="notice" text={notice} close={()=>setNotice("")}/>} {error&&<Banner kind="error-banner" text={error} close={()=>setError("")}/>} {view==="events"&&<Events data={events} selected={selected} seats={seats} busy={busy} select={setSelected} book={book} eventPage={loadEvents} seatPage={p=>selected&&loadSeats(selected,p)}/>} {view==="bookings"&&<Bookings data={bookings} events={events.items} page={loadBookings}/>} {view==="admin"&&user.role==="ADMIN"&&<Admin events={events.items} selected={selected} select={setSelected} save={saveEvent} remove={remove} busy={busy}/>} {view==="metrics"&&user.role==="ADMIN"&&<MetricsPanel data={metrics} refresh={loadMetrics}/>}</section></main>;
 }
+
+function Auth({register,busy,error,submit,toggle}:{register:boolean;busy:boolean;error:string;submit:(e:FormEvent<HTMLFormElement>)=>void;toggle:()=>void}){return <main className="auth-layout"><section className="auth-story"><div className="logo-mark light">U</div><p className="eyebrow light-text">UNIEVENTS</p><h1>Every campus story starts with a seat.</h1><p>Discover university events, reserve in real time, and keep every confirmation in one place.</p><div className="story-stat"><strong>Live</strong><span>seat availability powered by TCP snapshots</span></div></section><section className="auth-panel"><div className="auth-card"><p className="eyebrow">SECURE STUDENT PORTAL</p><h2>{register?"Create your account":"Welcome back"}</h2><p className="muted">{register?"Use your university details to join.":"Sign in to discover what’s happening."}</p><form onSubmit={submit}>{register&&<label>Full name<input name="name" required maxLength={100}/></label>}<label>Email address<input name="email" type="email" required maxLength={254}/></label><label>Password<input name="password" type="password" required minLength={register?8:1} maxLength={72}/></label><button className="primary" disabled={busy}>{busy?"Please wait…":register?"Create account":"Sign in"}</button></form>{error&&<p className="form-error">{error}</p>}<p className="switch-copy">{register?"Already registered?":"New to UniEvents?"} <button onClick={toggle} className="link-button" type="button">{register?"Sign in":"Create an account"}</button></p></div></section></main>}
+function Nav({active,go,children}:{active:boolean;go:()=>void;children:React.ReactNode}){return <button className={`nav-button ${active?"active":""}`} onClick={go}>{children}</button>}
+function Banner({kind,text,close}:{kind:string;text:string;close:()=>void}){return <div className={kind} role="status"><span>{text}</span><button onClick={close}>Dismiss</button></div>}
+function Pager({page,total,go}:{page:number;total:number;go:(p:number)=>void}){return <div className="pager"><button disabled={page<=0} onClick={()=>go(page-1)}>Previous</button><span>Page {page+1} of {Math.max(1,total)}</span><button disabled={page+1>=total} onClick={()=>go(page+1)}>Next</button></div>}
+function Empty({text}:{text:string}){return <div className="empty"><div>U</div><h3>Nothing here yet</h3><p>{text}</p></div>}
+
+function Events({data,selected,seats,busy,select,book,eventPage,seatPage}:{data:Page<EventItem>;selected:EventItem|null;seats:Page<Seat>;busy:boolean;select:(e:EventItem|null)=>void;book:(s:Seat)=>void;eventPage:(p:number)=>void;seatPage:(p:number)=>void}){if(selected)return <div className="detail"><button className="back-button" onClick={()=>select(null)}>Back to events</button><div className="event-hero"><div><span className="date-chip">{fmt(selected.startsAt)}</span><h3>{selected.title}</h3><p>{selected.description||"A university event worth showing up for."}</p><div className="event-meta"><span>{selected.venue}</span><span>{selected.capacity} seats</span></div></div><div className="hero-letter">{selected.title[0]}</div></div><div className="seat-panel"><div className="section-heading"><div><p className="eyebrow">LIVE INVENTORY</p><h3>Choose your seat</h3></div><div className="legend"><span><i className="available"/>Available</span><span><i className="booked"/>Booked</span></div></div>{seats.items.length?<div className="seat-grid">{seats.items.map(s=><button key={s.seatId} disabled={busy||s.status!=="AVAILABLE"} onClick={()=>book(s)} className={`seat ${s.status.toLowerCase()}`}>{s.seatNumber}</button>)}</div>:<Empty text="No seats are available for this event."/>}<Pager page={seats.page} total={seats.totalPages} go={seatPage}/></div></div>;return <><div className="section-heading"><div><p className="eyebrow">UPCOMING</p><h3>{data.totalElements} events waiting</h3></div></div>{data.items.length?<div className="event-grid">{data.items.map((e,i)=><article className={`event-card tone-${i%4}`} key={e.eventId}><div className="card-art"><span>{new Date(e.startsAt).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</span><strong>{e.title[0]}</strong></div><div className="card-copy"><p className="eyebrow">{e.venue}</p><h3>{e.title}</h3><p>{e.description||"Join the campus community for this upcoming event."}</p><button onClick={()=>select(e)}>View seats</button></div></article>)}</div>:<Empty text="No upcoming events yet. Check back soon."/>}<Pager page={data.page} total={data.totalPages} go={eventPage}/></>}
+function Bookings({data,events,page}:{data:Page<Booking>;events:EventItem[];page:(p:number)=>void}){return <>{data.items.length?<div className="ticket-list">{data.items.map(b=>{const e=events.find(x=>x.eventId===b.eventId);return <article className="ticket" key={b.bookingId}><div className="ticket-mark">UE</div><div><p className="eyebrow">CONFIRMED BOOKING</p><h3>{e?.title||`Event ${b.eventId}`}</h3><p>{b.bookingReference}</p><small>Seat ID {b.seatId} · Booked {fmt(b.createdAt)}</small></div><span className="status-chip">{b.status}</span></article>})}</div>:<Empty text="You have no bookings yet. Choose an event to get started."/>}<Pager page={data.page} total={data.totalPages} go={page}/></>}
+function Admin({events,selected,select,save,remove,busy}:{events:EventItem[];selected:EventItem|null;select:(e:EventItem|null)=>void;save:(e:FormEvent<HTMLFormElement>)=>void;remove:(e:EventItem)=>void;busy:boolean}){return <div className="admin-grid"><section className="panel"><div className="section-heading"><div><p className="eyebrow">EVENT EDITOR</p><h3>{selected?"Update event":"Create an event"}</h3></div>{selected&&<button className="quiet-button" onClick={()=>select(null)}>New event</button>}</div><form key={selected?.eventId||"new"} onSubmit={save} className="admin-form"><input type="hidden" name="eventId" value={selected?.eventId||""}/><label>Event title<input name="title" required maxLength={150} defaultValue={selected?.title}/></label><label>Description<textarea name="description" maxLength={2000} rows={4} defaultValue={selected?.description}/></label><div className="form-row"><label>Venue<input name="venue" required maxLength={200} defaultValue={selected?.venue}/></label><label>Start date and time<input name="startsAt" type="datetime-local" required defaultValue={selected?new Date(selected.startsAt).toISOString().slice(0,16):""}/></label></div>{!selected&&<label>Seat capacity<input name="capacity" type="number" min={1} max={1000} required/></label>}<button className="primary" disabled={busy}>{busy?"Saving…":selected?"Save changes":"Create event and seats"}</button></form></section><section className="panel"><p className="eyebrow">CURRENT PROGRAMME</p><div className="admin-events">{events.map(e=><div key={e.eventId}><button onClick={()=>select(e)}><strong>{e.title}</strong><small>{fmt(e.startsAt)} · {e.venue}</small></button><button className="danger-button" onClick={()=>remove(e)}>Delete</button></div>)}</div></section></div>}
+function MetricsPanel({data,refresh}:{data:Metrics|null;refresh:()=>void}){if(!data)return <Empty text="Loading server metrics…"/>;const cards=[["Active workers",`${data.activeWorkers} / ${data.maxPoolSize}`],["Queued connections",`${data.queuedTasks}`],["Active clients",`${data.activeConnections}`],["Completed tasks",`${data.totalCompletedTasks}`],["Rejected tasks",`${data.totalRejectedTasks}`],["Server state",data.state]];return <><div className="section-heading"><div><p className="eyebrow">EXECUTORSERVICE</p><h3>Live server health</h3></div><button className="quiet-button" onClick={refresh}>Refresh</button></div><div className="metrics-grid">{cards.map(([l,v])=><article key={l}><span>{l}</span><strong>{v}</strong></article>)}</div><div className="capacity"><span>Queue capacity remaining</span><strong>{data.queueRemainingCapacity}</strong></div></>}
