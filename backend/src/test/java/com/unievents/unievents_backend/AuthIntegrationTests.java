@@ -35,7 +35,7 @@ class AuthIntegrationTests {
 
     @Test
     void registerLoginSessionAndLogout() throws Exception {
-        db.execute("CREATE TABLE IF NOT EXISTS app_users(id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name VARCHAR(100), email VARCHAR(254) UNIQUE, password_hash VARCHAR(255))");
+        db.execute("CREATE TABLE IF NOT EXISTS app_users(id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name VARCHAR(100), email VARCHAR(254) UNIQUE, password_hash VARCHAR(255), role VARCHAR(20) DEFAULT 'STUDENT')");
         assertEquals(401, get("me").statusCode());
         assertEquals(403, post("login", "{}", false).statusCode());
         assertEquals(400, post("register", "{\"name\":\"\",\"email\":\"invalid\",\"password\":\"short\"}", true).statusCode());

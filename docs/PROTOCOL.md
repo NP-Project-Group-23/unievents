@@ -89,7 +89,7 @@ Never serialize JPA entities or Spring `Page` directly as the public contract.
 | `GET_BOOKING` | M3 | Session | `bookingId` | BookingResult for verified user | Pending extension using existing service |
 | `SUBSCRIBE_EVENT` | M4 | Session | `eventId,udpPort` | `subscriptionId,eventId,expiresAt,streamId` | Pending |
 | `UNSUBSCRIBE_EVENT` | M4 | Session | `subscriptionId` | `subscriptionId,removed:true` | Pending |
-| `GET_METRICS` | M5 | ADMIN | `{}` | ServerMetricsSnapshot | Adapter/registration pending |
+| `GET_METRICS` | M5 | ADMIN | `{}` | ServerMetricsSnapshot | Registered; TCP/HTTP permissions verified in Step 3 |
 
 Pagination: zero-based `page`, default 0; `size` default 20, range 1–100. Page:
 `{items:[],page:0,size:20,totalElements:0,totalPages:0}`. Counts must be real.
@@ -195,15 +195,15 @@ notification coordination and NAT traversal are not implemented guarantees.
 
 ## Known implementation gaps
 
-- M1: dispatcher currently preserves stale connection identity on failed token
-  validation; admin registration can trust that identity. Enforce the rules above.
-- M1: current internal-error responses can include exception details; sanitize them.
+- Step 3 enforces fresh token validation for every registered operation except
+  PING, ECHO, REGISTER and LOGIN. Admin registration independently verifies the
+  token. Dispatcher/login/registration internal-error responses are sanitized.
 - M1/M2/M5: Step 2 application lifecycle, concrete socket handler and bounded
   execution-manager wiring passed the selected 86-test regression run; see
   [verification](TCP_STEP_2.md). Full desktop/PostgreSQL verification remains pending.
 - M2/M3/M4: implement pending operations, response mapping and DTO validation.
-- M5: adapt `MetricsProtocolHandler.MetricsEnvelope` to `ResponseEnvelope`, register
-  it, and apply ADMIN authorization to both TCP and HTTP monitoring.
+- Step 3 replaces the metrics-specific envelope with `ResponseEnvelope`, registers
+  GET_METRICS and applies ADMIN authorization to TCP and HTTP monitoring.
 - M5: retain the fields of `ServerMetricsSnapshot`; `totalCompletedTasks` counts
   handler tasks, not requests. Add distinct request counters in a reviewed extension.
 

@@ -282,8 +282,7 @@ class AuthHandlersIntegrationTest {
         // Initial state: unauthenticated
         RequestEnvelope unauthInspect = RequestEnvelope.of("INSPECT_CONTEXT", null);
         ResponseEnvelope unauthResp = client.sendSync(unauthInspect);
-        assertTrue(unauthResp.isSuccess());
-        assertFalse(unauthResp.data().get("authenticated").asBoolean(), "Connection should initially be unauthenticated");
+        assertEquals("UNAUTHENTICATED", unauthResp.errorCode());
 
         // Register student
         ObjectNode regPayload = MAPPER.createObjectNode();
@@ -319,7 +318,6 @@ class AuthHandlersIntegrationTest {
 
         // Inspect context after logout
         ResponseEnvelope postLogoutResp = client.sendSync(RequestEnvelope.of("INSPECT_CONTEXT", null));
-        assertTrue(postLogoutResp.isSuccess());
-        assertFalse(postLogoutResp.data().get("authenticated").asBoolean(), "ConnectionContext must be unauthenticated after logout");
+        assertEquals("UNAUTHENTICATED", postLogoutResp.errorCode());
     }
 }

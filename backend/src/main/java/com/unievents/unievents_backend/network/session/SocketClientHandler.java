@@ -95,25 +95,8 @@ public final class SocketClientHandler implements ClientHandler {
                     continue;
                 }
 
-                ConnectionContext effectiveContext = dispatcher.enrichContext(request, context);
-                if (effectiveContext != null && effectiveContext.isAuthenticated()) {
-                    context = effectiveContext;
-                }
-
+                // The dispatcher validates each request token; socket identity is never cached.
                 ResponseEnvelope response = dispatcher.dispatch(request, context);
-
-                if ("LOGIN".equalsIgnoreCase(request.type())
-                        && response.isSuccess()
-                        && response.data() != null) {
-                    Long userId = response.data().hasNonNull("userId") ? response.data().get("userId").asLong() : null;
-                    String email = response.data().hasNonNull("email") ? response.data().get("email").asText() : null;
-                    String role = response.data().hasNonNull("role") ? response.data().get("role").asText() : null;
-                    if (userId != null) {
-                        context = context.withUser(userId, email, role);
-                    }
-                } else if ("LOGOUT".equalsIgnoreCase(request.type()) && response.isSuccess()) {
-                    context = context.withUser(null, null, null);
-                }
 
                 FrameCodec.writeEnvelope(writer, response);
             }

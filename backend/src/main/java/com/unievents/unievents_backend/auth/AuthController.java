@@ -40,7 +40,7 @@ public class AuthController {
     public record Login(@NotBlank @Email @Size(max=254) String email,
         @NotBlank @Size(max=72) String password) {}
     public record User(long id, String name, String email) {}
-    private record Account(User user, String hash) {}
+    private record Account(User user, String hash, String role) {}
 
     @GetMapping("/csrf")
     public Map<String, String> csrf(CsrfToken token) {
@@ -62,22 +62,22 @@ public class AuthController {
         } catch (DuplicateKeyException exception) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "An account with this email already exists.");
         }
-        signIn(user, request, response);
+        signIn(user, "STUDENT", request, response);
         return user;
     }
 
     @PostMapping("/login")
     public User login(@Valid @RequestBody Login input, HttpServletRequest request, HttpServletResponse response) {
         checkPasswordLength(input.password());
-        List<Account> accounts = db.query("SELECT id,name,email,password_hash FROM app_users WHERE email=?",
-            (rs, row) -> new Account(new User(rs.getLong("id"), rs.getString("name"), rs.getString("email")), rs.getString("password_hash")),
+        List<Account> accounts = db.query("SELECT id,name,email,password_hash,role FROM app_users WHERE email=?",
+            (rs, row) -> new Account(new User(rs.getLong("id"), rs.getString("name"), rs.getString("email")), rs.getString("password_hash"), rs.getString("role")),
             normalize(input.email()));
         boolean matches = passwords.matches(input.password(), accounts.isEmpty() ? dummyHash : accounts.getFirst().hash());
         if (accounts.isEmpty() || !matches) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password.");
         }
         User user = accounts.getFirst().user();
-        signIn(user, request, response);
+        signIn(user, accounts.getFirst().role(), request, response);
         return user;
     }
 
@@ -87,11 +87,12 @@ public class AuthController {
             (rs, row) -> new User(rs.getLong("id"), rs.getString("name"), rs.getString("email")), principal.getName());
     }
 
-    private void signIn(User user, HttpServletRequest request, HttpServletResponse response) {
+    private void signIn(User user, String role, HttpServletRequest request, HttpServletResponse response) {
         request.getSession();
         request.changeSessionId();
         var context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(user.email(), null, List.of()));
+        context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(user.email(), null, List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+            "ADMIN".equals(role) ? "ROLE_ADMIN" : "ROLE_STUDENT"))));
         SecurityContextHolder.setContext(context);
         sessions.saveContext(context, request, response);
     }

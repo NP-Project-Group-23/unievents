@@ -1,5 +1,10 @@
 # Member 5: Phase 2 ClientHandler Execution, Connection Management & Live Monitoring (Tasks B17 & F07)
 
+> Integration update: [Step 3](AUTH_METRICS_STEP_3.md) replaces the standalone
+> `handle(requestId)` metrics API with the shared `RequestHandler` interface,
+> registers GET_METRICS, and requires admin access for HTTP and TCP monitoring.
+> The earlier method signatures and registration TODOs below are historical.
+
 ## 1. Network Programming Concept: Client Execution & Observable Metrics
 
 In Phase 1 (Task B16), Member 5 established the bounded `ServerThreadPoolExecutor` concurrency foundation. Phase 2 delivers **Task B17** and **Task F07**:

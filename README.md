@@ -19,6 +19,8 @@ tests or migration experiments.
 
 Team documentation:
 
+- [Verified session authorization and metrics integration](docs/AUTH_METRICS_STEP_3.md)
+
 - [Current TCP protocol, authentication rules and operation contracts](docs/PROTOCOL.md)
 - [JavaFX integration architecture, ownership and configuration plan](docs/ARCHITECTURE.md)
 

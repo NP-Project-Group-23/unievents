@@ -17,10 +17,12 @@ public class AuthHandlersConfig {
             LoginHandler loginHandler,
             LogoutHandler logoutHandler,
             SessionCheckHandler sessionCheckHandler,
-            com.unievents.unievents_backend.domain.service.SessionManager sessionManager
+            com.unievents.unievents_backend.domain.service.SessionManager sessionManager,
+            com.unievents.unievents_backend.network.executor.MetricsProtocolHandler metricsHandler
     ) {
         RequestDispatcher dispatcher = new RequestDispatcher(sessionManager);
         registerHandlers(dispatcher, registerHandler, loginHandler, logoutHandler, sessionCheckHandler);
+        dispatcher.registerHandler("GET_METRICS", metricsHandler);
         return dispatcher;
     }
 
