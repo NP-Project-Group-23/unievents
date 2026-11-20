@@ -6,7 +6,7 @@ const PUBLIC = new Set(["LOGIN", "REGISTER"]);
 const ALLOWED = new Set([
   ...PUBLIC, "LOGOUT", "SESSION_CHECK", "LIST_EVENTS", "GET_EVENT", "GET_SEATS",
   "BOOK_SEAT", "MY_BOOKINGS", "GET_BOOKING", "CREATE_EVENT", "UPDATE_EVENT",
-  "DELETE_EVENT", "GET_METRICS",
+  "DELETE_EVENT", "EVENT_BOOKINGS", "GET_METRICS",
 ]);
 
 function statusFor(code?: string) {

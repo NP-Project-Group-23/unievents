@@ -84,9 +84,10 @@ Never serialize JPA entities or Spring `Page` directly as the public contract.
 | `UPDATE_EVENT` | M2 | ADMIN | `eventId,title,description?,venue,startsAt` | EventSummary | Registered in Step 4; omitted description clears it |
 | `DELETE_EVENT` | M2 | ADMIN | `eventId` | `eventId,deleted:true` | Registered in Step 4 |
 | `GET_SEATS` | M3 | Session | `eventId,page?,size?` | `eventId,items:[SeatSummary],page,size,totalElements,totalPages` | Registered in Step 5 |
-| `BOOK_SEAT` | M3 | Session | `eventId,seatId` | BookingResult | Registered in Step 5 |
+| `BOOK_SEAT` | M3 | Session | `eventId,seatId,idempotencyKey?` | BookingResult | Key is required for new clients; omitted only for legacy compatibility |
 | `MY_BOOKINGS` | M3 | Session | `page?,size?` | Page of BookingResult for verified user | Registered in Step 5 |
 | `GET_BOOKING` | M3 | Session | `bookingId` | BookingResult for verified user | Registered in Step 5 |
+| `EVENT_BOOKINGS` | M3/M5 | ADMIN | `eventId,page?,size?` | `eventId` and page of BookingResult plus `userId` | Administrative event manifest; identity is not added to student responses |
 | `SUBSCRIBE_EVENT` | M4 | Session | `eventId,udpPort` | `subscriptionId,eventId,expiresAt,streamId` | Registered in Step 6 |
 | `UNSUBSCRIBE_EVENT` | M4 | Session | `subscriptionId` | `subscriptionId,removed` | Registered in Step 6 |
 | `GET_METRICS` | M5 | ADMIN | `{}` | ServerMetricsSnapshot | Registered; TCP/HTTP permissions verified in Step 3 |
@@ -146,7 +147,7 @@ Illustrative values only. Each code block is one frame followed by LF on the wir
 {"requestId":"11111111-1111-4111-8111-111111111111","status":"SUCCESS","data":{"token":"example-session-token","userId":7,"name":"Student","email":"student@example.com","role":"STUDENT"}}
 ```
 ```json
-{"requestId":"22222222-2222-4222-8222-222222222222","type":"BOOK_SEAT","token":"example-session-token","payload":{"eventId":10,"seatId":5}}
+{"requestId":"22222222-2222-4222-8222-222222222222","type":"BOOK_SEAT","token":"example-session-token","payload":{"eventId":10,"seatId":5,"idempotencyKey":"booking-550e8400-e29b-41d4-a716-446655440000"}}
 ```
 ```json
 {"requestId":"22222222-2222-4222-8222-222222222222","status":"SUCCESS","data":{"bookingId":101,"bookingReference":"UE-550E8400-E29B-41D4-A716-446655440000","eventId":10,"seatId":5,"status":"CONFIRMED","createdAt":"2026-11-19T08:00:00Z"}}
@@ -160,12 +161,14 @@ The last two frames are alternative outcomes, never two replies to one request.
 
 Client request timeout defaults to 10 seconds; server socket idle timeout defaults
 to 30 seconds. Neither timeout proves a write was rolled back. Request IDs provide
-correlation only; durable idempotency/replay is not implemented.
-Reconnect must not automatically replay mutations. Validate the session, then
-refresh seats and the user's history to resolve an uncertain booking result. If
-still unresolved, show an unknown-outcome state and allow explicit refresh. A
-later explicit retry may return a seat conflict for a booking already owned by
-the caller; display the original booking when history confirms ownership.
+correlation only. A new client generates one `idempotencyKey` for a booking attempt
+(1-64 characters from `A-Z`, `a-z`, `0-9`, `.`, `_`, `:`, or `-`) and retains it
+until the result is known. Retrying the same user/event/seat with that key returns
+the original booking; reusing it for another event or seat returns `INVALID_REQUEST`.
+The database unique constraint on `(user_id, idempotency_key)` makes this durable
+across reconnects and application instances. After reconnecting, validate the
+session and retry an uncertain booking with the same key, then refresh the seat
+snapshot and booking history. Never generate a new key for an uncertain retry.
 Read-only requests may be retried with new IDs after connection/session recovery.
 
 ## UDP handoff target (M3/M4)

@@ -46,4 +46,11 @@ describe("TCP gateway route", () => {
     expect(expired.status).toBe(401);
     expect(expired.headers.get("set-cookie")).toContain("Max-Age=0");
   });
+
+  it("allows the admin event manifest operation and preserves forbidden responses", async () => {
+    sendTcp.mockResolvedValue({ status: "ERROR", errorCode: "FORBIDDEN", errorMessage: "Administrator privilege required." });
+    const response = await POST(request("EVENT_BOOKINGS", { eventId: 10, page: 0, size: 20 }, "student-token"));
+    expect(sendTcp).toHaveBeenCalledWith("EVENT_BOOKINGS", { eventId: 10, page: 0, size: 20 }, "student-token");
+    expect(response.status).toBe(403);
+  });
 });

@@ -23,13 +23,17 @@ describe("UniEvents portal", () => {
   });
 
   it("loads events and displays a backend booking conflict without hiding the seat view", async () => {
+    const bookingKeys: string[] = [];
     const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body));
       if (request.type === "SESSION_CHECK") return gateway({ status: "SUCCESS", data: { userId: 7, email: "student@test", role: "STUDENT" } });
       if (request.type === "LIST_EVENTS") return gateway({ status: "SUCCESS", data: { items: [{ eventId: 10, title: "Campus Concert", description: "Live music", venue: "Main Hall", startsAt: "2030-01-01T18:00:00Z", capacity: 2 }], page: 0, totalPages: 1, totalElements: 1 } });
       if (request.type === "MY_BOOKINGS") return gateway({ status: "SUCCESS", data: { items: [], page: 0, totalPages: 0, totalElements: 0 } });
       if (request.type === "GET_SEATS") return gateway({ status: "SUCCESS", data: { items: [{ seatId: 1, eventId: 10, seatNumber: "A1", status: "AVAILABLE" }], page: 0, totalPages: 1, totalElements: 1 } });
-      if (request.type === "BOOK_SEAT") return gateway({ status: "ERROR", errorCode: "SEAT_ALREADY_BOOKED", errorMessage: "Seat is already booked." }, 409);
+      if (request.type === "BOOK_SEAT") {
+        bookingKeys.push(request.payload.idempotencyKey);
+        return gateway({ status: "ERROR", errorCode: "SEAT_ALREADY_BOOKED", errorMessage: "Seat is already booked." }, 409);
+      }
       return gateway({ status: "SUCCESS", data: {} });
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -42,6 +46,31 @@ describe("UniEvents portal", () => {
     await user.click(seat);
     expect(await screen.findByText("Seat is already booked.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Choose your seat" })).toBeInTheDocument();
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    await user.click(screen.getByRole("button", { name: "A1" }));
+    await waitFor(() => expect(bookingKeys).toHaveLength(2));
+    expect(bookingKeys[0]).toBeTruthy();
+    expect(bookingKeys[1]).toBe(bookingKeys[0]);
+  });
+
+  it("lets an administrator open an event booking manifest", async () => {
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body));
+      if (request.type === "SESSION_CHECK") return gateway({ status: "SUCCESS", data: { userId: 1, name: "Admin", email: "admin@test", role: "ADMIN" } });
+      if (request.type === "LIST_EVENTS") return gateway({ status: "SUCCESS", data: { items: [{ eventId: 10, title: "Campus Concert", description: "Live music", venue: "Main Hall", startsAt: "2030-01-01T18:00:00Z", capacity: 2 }], page: 0, totalPages: 1, totalElements: 1 } });
+      if (request.type === "MY_BOOKINGS") return gateway({ status: "SUCCESS", data: { items: [], page: 0, totalPages: 0, totalElements: 0 } });
+      if (request.type === "EVENT_BOOKINGS") return gateway({ status: "SUCCESS", data: { eventId: 10, items: [{ bookingId: 22, userId: 7, bookingReference: "UE-ADMIN-TEST", eventId: 10, seatId: 4, status: "CONFIRMED", createdAt: "2029-12-01T10:00:00Z" }], page: 0, totalPages: 1, totalElements: 1 } });
+      return gateway({ status: "SUCCESS", data: {} });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<Home />);
+    await user.click(await screen.findByRole("button", { name: "Event studio" }));
+    await user.click(screen.getByRole("button", { name: "Bookings" }));
+    expect(await screen.findByRole("heading", { name: "Campus Concert" })).toBeInTheDocument();
+    expect(screen.getByText("UE-ADMIN-TEST")).toBeInTheDocument();
+    expect(screen.getByText("#7")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("/api/gateway", expect.objectContaining({
+      body: JSON.stringify({ type: "EVENT_BOOKINGS", payload: { eventId: 10, page: 0, size: 20 } }),
+    }));
   });
 });

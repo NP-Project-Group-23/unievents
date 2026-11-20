@@ -78,9 +78,10 @@ times) plus fourteen service, persistence and authentication regression tests.
 Every same-seat repetition produced one winner and nine expected rejections;
 every different-seat repetition produced ten committed bookings.
 
-H2 evidence does not establish PostgreSQL lock behavior. Before shared deployment,
-run the scenarios against a disposable PostgreSQL database or isolated Neon branch,
-with the actual migration, independent connections and recorded isolation level.
+H2 evidence does not establish PostgreSQL lock behavior. The opt-in
+`PostgresBookingConcurrencyTests` now runs the scenarios against a disposable
+PostgreSQL database or isolated Neon branch with the actual migrations and
+independent connections; see `MEMBER3_POSTGRES_CONCURRENCY_STAGE.md`.
 Also run competing calls from separate application instances. Do not point these
 fixtures at shared team data: setup deletes all rows in their test tables.
 
