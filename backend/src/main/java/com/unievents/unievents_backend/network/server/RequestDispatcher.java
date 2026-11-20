@@ -22,7 +22,7 @@ public class RequestDispatcher {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RequestDispatcher.class);
     private static final Set<String> PUBLIC = Set.of("PING", "ECHO", "REGISTER", "LOGIN");
-    private static final Set<String> ADMIN = Set.of("GET_METRICS", "CREATE_EVENT", "UPDATE_EVENT", "DELETE_EVENT");
+    private static final Set<String> ADMIN = Set.of("GET_METRICS", "CREATE_EVENT", "UPDATE_EVENT", "DELETE_EVENT", "EVENT_BOOKINGS");
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private final Map<String, RequestHandler> handlers = new ConcurrentHashMap<>();
     private volatile SessionManager sessionManager;

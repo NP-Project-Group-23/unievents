@@ -26,7 +26,7 @@ class MigrationTests {
     @Test
     void freshInstallAndRepeatAreVersioned() {
         var migration = flyway(url(),"latest");
-        assertEquals(4,migration.migrate().migrationsExecuted);
+        assertEquals(5,migration.migrate().migrationsExecuted);
         assertEquals(0,migration.migrate().migrationsExecuted);
         migration.validate();
     }
@@ -38,7 +38,7 @@ class MigrationTests {
         try (var connection = DriverManager.getConnection(url,"sa",""); var sql = connection.createStatement()) {
             sql.executeUpdate("INSERT INTO app_users(name,email,password_hash) VALUES ('Existing','existing@test.com','hash')");
         }
-        assertEquals(2,flyway(url,"latest").migrate().migrationsExecuted);
+        assertEquals(3,flyway(url,"latest").migrate().migrationsExecuted);
         try (var connection = DriverManager.getConnection(url,"sa",""); var sql = connection.createStatement();
              var result = sql.executeQuery("SELECT email FROM app_users")) {
             assertTrue(result.next()); assertEquals("existing@test.com",result.getString(1));

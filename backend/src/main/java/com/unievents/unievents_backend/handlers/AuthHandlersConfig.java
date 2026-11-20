@@ -29,7 +29,7 @@ public class AuthHandlersConfig {
         for (String type : java.util.List.of("CREATE_EVENT", "UPDATE_EVENT", "DELETE_EVENT", "LIST_EVENTS", "GET_EVENT")) {
             dispatcher.registerHandler(type, eventHandler);
         }
-        for (String type : java.util.List.of("GET_SEATS", "BOOK_SEAT", "MY_BOOKINGS", "GET_BOOKING")) {
+        for (String type : java.util.List.of("GET_SEATS", "BOOK_SEAT", "MY_BOOKINGS", "GET_BOOKING", "EVENT_BOOKINGS")) {
             dispatcher.registerHandler(type, bookingHandler);
         }
         dispatcher.registerHandler("SUBSCRIBE_EVENT", subscriptionHandler);

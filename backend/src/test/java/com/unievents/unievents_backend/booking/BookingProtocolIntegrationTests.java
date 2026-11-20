@@ -47,6 +47,7 @@ class BookingProtocolIntegrationTests {
     private Long secondUserId;
     private String firstToken;
     private String secondToken;
+    private String adminToken;
     private Seat firstSeat;
     private Seat secondSeat;
 
@@ -59,9 +60,11 @@ class BookingProtocolIntegrationTests {
         db.update("DELETE FROM events");
         db.update("DELETE FROM app_users");
         db.update("INSERT INTO app_users(name,email,password_hash,role) VALUES "
-            + "('One','one@test.com','hash','STUDENT'),('Two','two@test.com','hash','STUDENT')");
+            + "('One','one@test.com','hash','STUDENT'),('Two','two@test.com','hash','STUDENT'),"
+            + "('Admin','admin@test.com','hash','ADMIN')");
         firstUserId = db.queryForObject("SELECT id FROM app_users WHERE email='one@test.com'", Long.class);
         secondUserId = db.queryForObject("SELECT id FROM app_users WHERE email='two@test.com'", Long.class);
+        Long adminId = db.queryForObject("SELECT id FROM app_users WHERE email='admin@test.com'", Long.class);
         db.update("INSERT INTO events(id,title,description,venue,starts_at,capacity,created_by) "
                 + "OVERRIDING SYSTEM VALUE VALUES (10,'Concert','','Hall',?,3,?)",
             OffsetDateTime.now().plusDays(2), firstUserId);
@@ -70,6 +73,7 @@ class BookingProtocolIntegrationTests {
         seats.saveAndFlush(new Seat(10L, "A3"));
         firstToken = sessions.createSession(user(firstUserId, "One", "one@test.com")).token();
         secondToken = sessions.createSession(user(secondUserId, "Two", "two@test.com")).token();
+        adminToken = sessions.createSession(user(adminId, "Admin", "admin@test.com", Role.ADMIN)).token();
     }
 
     @Test
@@ -86,13 +90,18 @@ class BookingProtocolIntegrationTests {
             assertEquals(firstSeat.getId().longValue(), page.data().path("items").get(0).path("seatId").asLong());
 
             var request = json.createObjectNode().put("eventId", 10).put("seatId", firstSeat.getId())
-                .put("userId", secondUserId); // Deliberately ignored: identity comes from the session.
+                .put("userId", secondUserId).put("idempotencyKey", "tcp-booking-request-1"); // Identity comes from the session.
             var booked = send(client, "BOOK_SEAT", firstToken, request);
             assertTrue(booked.isSuccess(), booked.errorMessage());
             long bookingId = booked.data().path("bookingId").asLong();
             assertEquals(firstUserId, bookings.findById(bookingId).orElseThrow().getUserId());
             assertEquals(1, probe.events.size());
             assertEquals(bookingId, probe.events.getFirst().bookingId());
+
+            var replay = send(client, "BOOK_SEAT", firstToken, request);
+            assertTrue(replay.isSuccess(), replay.errorMessage());
+            assertEquals(bookingId, replay.data().path("bookingId").asLong());
+            assertEquals(1, probe.events.size());
 
             assertEquals("SEAT_ALREADY_BOOKED", send(client, "BOOK_SEAT", secondToken, request).errorCode());
             assertEquals(1, bookings.count());
@@ -119,8 +128,41 @@ class BookingProtocolIntegrationTests {
                 json.createObjectNode().put("eventId", 999)).errorCode());
             assertEquals("INVALID_REQUEST", send(client, "BOOK_SEAT", firstToken,
                 json.createObjectNode().put("eventId", 10)).errorCode());
+            assertEquals("INVALID_REQUEST", send(client, "BOOK_SEAT", firstToken,
+                json.createObjectNode().put("eventId", 10).put("seatId", firstSeat.getId())
+                    .put("idempotencyKey", "bad key")).errorCode());
             assertEquals("INVALID_REQUEST", send(client, "GET_BOOKING", firstToken,
                 json.createObjectNode().put("bookingId", -1)).errorCode());
+        }
+    }
+
+    @Test
+    void administratorCanPageEventBookingManifestButStudentCannot() throws Exception {
+        var first = service.bookSeat(firstUserId,
+            new BookingRequest(10L, firstSeat.getId(), "admin-list-first"));
+        var second = service.bookSeat(secondUserId,
+            new BookingRequest(10L, secondSeat.getId(), "admin-list-second"));
+
+        try (var client = client()) {
+            var request = json.createObjectNode().put("eventId", 10).put("page", 0).put("size", 1);
+            assertEquals("FORBIDDEN", send(client, "EVENT_BOOKINGS", firstToken, request).errorCode());
+
+            var page = send(client, "EVENT_BOOKINGS", adminToken, request);
+            assertTrue(page.isSuccess(), page.errorMessage());
+            assertEquals(10, page.data().path("eventId").asLong());
+            assertEquals(2, page.data().path("totalElements").asInt());
+            assertEquals(2, page.data().path("totalPages").asInt());
+            assertEquals(1, page.data().path("items").size());
+            assertEquals(second.bookingId(), page.data().path("items").get(0).path("bookingId").asLong());
+            assertEquals(secondUserId, page.data().path("items").get(0).path("userId").asLong());
+
+            var next = send(client, "EVENT_BOOKINGS", adminToken,
+                json.createObjectNode().put("eventId", 10).put("page", 1).put("size", 1));
+            assertEquals(first.bookingId(), next.data().path("items").get(0).path("bookingId").asLong());
+            assertEquals("EVENT_NOT_FOUND", send(client, "EVENT_BOOKINGS", adminToken,
+                json.createObjectNode().put("eventId", 999)).errorCode());
+            assertEquals("INVALID_REQUEST", send(client, "EVENT_BOOKINGS", adminToken,
+                json.createObjectNode().put("eventId", 10).put("size", 101)).errorCode());
         }
     }
 
@@ -153,7 +195,11 @@ class BookingProtocolIntegrationTests {
     }
 
     private static User user(Long id, String name, String email) {
-        return new User(id, name, email, "hash", Role.STUDENT, Instant.now());
+        return user(id, name, email, Role.STUDENT);
+    }
+
+    private static User user(Long id, String name, String email, Role role) {
+        return new User(id, name, email, "hash", role, Instant.now());
     }
 
     @TestConfiguration

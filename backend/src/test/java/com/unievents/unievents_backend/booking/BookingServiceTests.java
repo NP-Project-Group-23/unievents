@@ -62,6 +62,41 @@ class BookingServiceTests {
     }
 
     @Test
+    void repeatedIdempotentRequestReturnsOriginalBooking() {
+        var request = new BookingRequest(10L, seat.getId(), "booking-retry-001");
+        var first = service.bookSeat(userId, request);
+        var replay = service.bookSeat(userId, request);
+        assertEquals(first, replay);
+        assertEquals(1, bookings.count());
+        assertEquals("booking-retry-001", bookings.findById(first.bookingId()).orElseThrow().getIdempotencyKey());
+
+        var otherSeat = seats.saveAndFlush(new Seat(10L, "A2"));
+        assertCode(INVALID_REQUEST, () -> service.bookSeat(userId,
+            new BookingRequest(10L, otherSeat.getId(), "booking-retry-001")));
+        assertEquals(Seat.Status.AVAILABLE, seats.findById(otherSeat.getId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    void simultaneousRetriesWithSameKeyConvergeOnOneBooking() throws Exception {
+        var ready = new CountDownLatch(2);
+        var start = new CountDownLatch(1);
+        var request = new BookingRequest(10L, seat.getId(), "same-concurrent-request");
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            Callable<BookingResult> attempt = () -> {
+                ready.countDown();
+                assertTrue(start.await(10, TimeUnit.SECONDS));
+                return service.bookSeat(userId, request);
+            };
+            var first = pool.submit(attempt);
+            var second = pool.submit(attempt);
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+            assertEquals(first.get(15, TimeUnit.SECONDS), second.get(15, TimeUnit.SECONDS));
+        }
+        assertEquals(1, bookings.count());
+    }
+
+    @Test
     void rejectsMissingSeatAndWrongEvent() {
         assertCode(SEAT_NOT_FOUND, () -> service.bookSeat(userId, new BookingRequest(11L, seat.getId())));
         assertCode(SEAT_NOT_FOUND, () -> service.bookSeat(userId, new BookingRequest(10L, Long.MAX_VALUE)));
@@ -92,6 +127,8 @@ class BookingServiceTests {
         assertCode(INVALID_REQUEST, () -> service.bookSeat(userId, null));
         assertCode(INVALID_REQUEST, () -> service.bookSeat(userId, new BookingRequest(null, seat.getId())));
         assertCode(INVALID_REQUEST, () -> service.bookSeat(userId, new BookingRequest(10L, 0L)));
+        assertCode(INVALID_REQUEST, () -> service.bookSeat(userId, new BookingRequest(10L, seat.getId(), " ")));
+        assertCode(INVALID_REQUEST, () -> service.bookSeat(userId, new BookingRequest(10L, seat.getId(), "bad key")));
         assertCode(INVALID_REQUEST, () -> service.getMyBooking(userId, null));
         assertCode(INVALID_REQUEST, () -> service.getMyBookings(userId, -1, 20));
         assertCode(INVALID_REQUEST, () -> service.getMyBookings(userId, 0, 101));
